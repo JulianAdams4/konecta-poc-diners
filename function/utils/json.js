@@ -2,12 +2,6 @@
 /* eslint-disable no-param-reassign */
 /* eslint-disable no-else-return */
 
-const createEntity = (name) => {
-  const jsonObject = {};
-  jsonObject[name] = { [`@${name}`]: name };
-  return jsonObject;
-};
-
 // Note: This function updates original object
 const deeplyConvertToArray = (path, obj) => {
   const properties = Array.isArray(path) ? path : path.split(".");
@@ -88,7 +82,6 @@ function updateNested(object, keys, modify) {
 }
 
 module.exports = {
-  createEntity,
   convertObjectPropertyToArray,
   getCircularReplacer,
   getNestedProperty,

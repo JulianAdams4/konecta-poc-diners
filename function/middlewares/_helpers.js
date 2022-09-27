@@ -1,7 +1,12 @@
+/* eslint-disable camelcase */
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable import/no-unresolved */
 const { publicPatters, contextKeys } = require("Utils/constants");
 const { parseReqParams, getFromContextData } = require("Utils/request");
+
+const db = require("Utils/database")("sessions.db");
+
+const dbSessions = db.collection;
 
 /**
  * Valida si la ruta solicitada es pública para saltear las demás validaciones
@@ -19,70 +24,38 @@ function isPublicRoute(req) {
 }
 
 /**
- * Valida que no se hayan alterado o cambiado los atributos de la sesión
- * @param {Object} req
- * @returns {Boolean} boolean
- */
-function hasChangedState(req) {
-  if (req.body && req.body.context && req.body.context.data) {
-    const query = parseReqParams(req);
-    const prevStateCode = getFromContextData(req, contextKeys.state);
-    const prevSessionStateCode = getFromContextData(
-      req,
-      contextKeys.session_state
-    );
-    const prevCode = getFromContextData(req, contextKeys.code);
-    if (
-      prevStateCode !== query.state ||
-      prevSessionStateCode !== query.session_state ||
-      prevCode !== query.code
-    ) {
-      global.logger.error({
-        message: {
-          baseUrl: req.baseUrl,
-          message: "Ha cambiado la sesion",
-          state: { prev: prevStateCode, new: query.state },
-          session_state: {
-            prev: prevSessionStateCode,
-            new: query.session_state,
-          },
-          code: { prev: prevCode, new: query.code },
-        },
-        label: global.getLabel(__dirname, __filename),
-      });
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
  * Valida que tenga todos los atributos de una sesión activa y válida
  * @param {Object} req
  * @returns {Boolean} boolean
  */
 function hasNoSession(req) {
-  const reqAccessToken = getFromContextData(req, contextKeys.access_token);
+  const prevData = dbSessions.findOne({
+    key: getFromContextData(req, contextKeys.state),
+  });
+  if (!prevData || !prevData.value) {
+    return true;
+  }
+  const reqAccessToken = prevData.value.access_token;
   if (!reqAccessToken || typeof reqAccessToken !== "string") {
     return true;
   }
-  const reqState = getFromContextData(req, contextKeys.state);
+  const reqState = prevData.value.state;
   if (!reqState || typeof reqState !== "string") {
     return true;
   }
-  const reqSessionState = getFromContextData(req, contextKeys.session_state);
+  const reqSessionState = prevData.value.session_state;
   if (!reqSessionState || typeof reqSessionState !== "string") {
     return true;
   }
-  const reqCode = getFromContextData(req, contextKeys.code);
+  const reqCode = prevData.value.code;
   if (!reqCode || typeof reqCode !== "string") {
     return true;
   }
-  const reqTokenExpiration = getFromContextData(req, contextKeys.expires_in);
+  const reqTokenExpiration = prevData.value.expires_in;
   if (!reqTokenExpiration || typeof reqTokenExpiration !== "string") {
     return true;
   }
-  const reqTokenDeadline = getFromContextData(req, contextKeys._deadline);
+  const reqTokenDeadline = prevData.value.deadline;
   if (!reqTokenDeadline || typeof reqTokenDeadline !== "string") {
     return true;
   }
@@ -94,10 +67,64 @@ function hasNoSession(req) {
  * @param {Object} req
  * @returns {Boolean} boolean
  */
+function hasChangedState(req) {
+  const query = parseReqParams(req);
+  const stateFromQuery = query.state;
+  const stateFromContext = getFromContextData(req, contextKeys.state);
+  const state = stateFromQuery || stateFromContext;
+  if (!state) return true;
+
+  const sessionStateFromQuery = query.session_state;
+  const sessionStateFromContext = getFromContextData(
+    req,
+    contextKeys.session_state
+  );
+  const session_state = sessionStateFromQuery || sessionStateFromContext;
+  if (!session_state) return true;
+
+  const prevData = dbSessions.findOne({ key: state });
+  if (!prevData || !prevData.value) return true;
+
+  if (
+    state !== prevData.value.state ||
+    session_state !== prevData.value.session_state
+  ) {
+    global.logger.error({
+      message: {
+        baseUrl: req.baseUrl,
+        message: "Ha cambiado la sesion",
+        state: { prev: prevData.value.state, new: state },
+        session_state: {
+          prev: prevData.value.session_state,
+          new: session_state,
+        },
+      },
+      label: global.getLabel(__dirname, __filename),
+    });
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Valida que no se hayan alterado o cambiado los atributos de la sesión
+ * @param {Object} req
+ * @returns {Boolean} boolean
+ */
 function hasExpiredSession(req) {
-  const reqTokenDeadline = getFromContextData(req, contextKeys._deadline);
+  const query = parseReqParams(req);
+  const stateFromQuery = query.state;
+  const stateFromContext = getFromContextData(req, contextKeys.state);
+  const state = stateFromQuery || stateFromContext;
+  if (!state) return true;
+
+  const prevData = dbSessions.findOne({ key: state });
+  if (!prevData || !prevData.value) return true;
+
+  const reqTokenDeadline = prevData.value.deadline;
   // eslint-disable-next-line radix
-  const parsedDeadline = parseInt(reqTokenDeadline);
+  const parsedDeadline = parseInt(`${reqTokenDeadline}`);
   return parsedDeadline > Date.now();
 }
 

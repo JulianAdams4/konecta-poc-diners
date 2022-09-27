@@ -3,10 +3,11 @@
 /* eslint-disable import/no-unresolved */
 
 const axios = require("axios");
-const { encryptDataDiners } = require("Controllers/_helpers");
+const jwtDecode = require("jwt-decode");
 const querystring = require("querystring");
+
+const { encryptDataDiners } = require("Controllers/_helpers");
 const { oauthServer } = require("Utils/constants");
-const { createEntity } = require("Utils/json");
 
 async function directorDateTime() {
   return new Promise((resolve, reject) => {
@@ -32,39 +33,52 @@ async function singleSelectPublicKey() {
   return new Promise((resolve, reject) => {
     const options = {
       method: "POST",
-      url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/singleSelectPublicKey`,
+      url: "https://director.dce.ec/desarrollo/directcall/singleSelectPublicKey",
+      // url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/singleSelectPublicKey`,
       headers: {
         "content-type": "application/json",
         accept: "application/json",
         channel: "IN",
         feature_id: "ROL@5500",
         func_type: "ADD",
-        timestampcanal: "2022-09-16T01:33:55.839Z",
+        timestampcanal: new Date().toString(),
       },
-      data: {},
+      data: "{}",
     };
     axios(options)
-      .then((response) => resolve(response.data))
-      .catch((error) => reject(error));
+      .then((response) => {
+        console.log(
+          "singleSelectPublicKey (resolve): ",
+          JSON.stringify(response.data),
+          JSON.stringify(options),
+          "\n"
+        );
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.log(
+          "singleSelectPublicKey (reject): ",
+          JSON.stringify(error),
+          JSON.stringify(options),
+          "\n"
+        );
+        reject(error);
+      });
   });
 }
 
 // eslint-disable-next-line no-unused-vars
 const getUsername = () => {
-  return oauthServer.default_oauth_username;
-  // eslint-disable-next-line no-unreachable
   return process.env.NODE_ENV === "development"
     ? oauthServer.default_oauth_username
-    : "username";
+    : "MERCHAN2024";
 };
 
 // eslint-disable-next-line no-unused-vars
 const getPassword = () => {
-  return oauthServer.default_oauth_password;
-  // eslint-disable-next-line no-unreachable
   return process.env.NODE_ENV === "development"
     ? oauthServer.default_oauth_password
-    : "password";
+    : "Tech.2020";
 };
 
 /**
@@ -77,8 +91,23 @@ const getPassword = () => {
  * - id_token,
  * - token_type
  */
-async function getOauthToken({ authCode, stateCode, verifierCode }) {
+async function getOauthToken({
+  authCode,
+  stateCode,
+  verifierCode,
+  workflowId,
+}) {
   return new Promise((resolve, reject) => {
+    const parsedRedirectUri = new URL(oauthServer.oauth_redirect_uri).href;
+    const body = {
+      client_id: oauthServer.client_id_public,
+      code_verifier: verifierCode,
+      code: authCode,
+      grant_type: oauthServer.grant_type_public,
+      redirect_uri: `${parsedRedirectUri}?workflowId=${workflowId}`,
+      scope: oauthServer.scope_private,
+      state: stateCode,
+    };
     const options = {
       method: "POST",
       url: oauthServer.oauth_server_url,
@@ -91,19 +120,27 @@ async function getOauthToken({ authCode, stateCode, verifierCode }) {
         timeout: oauthServer.timeout,
         timestampcanal: new Date().toString(),
       },
+      data: querystring.stringify(body),
     };
-    const body = {
-      client_id: oauthServer.client_id_public,
-      code_verifier: verifierCode,
-      code: authCode,
-      grant_type: oauthServer.grant_type_public,
-      redirect_uri: oauthServer.oauth_redirect_uri,
-      scope: oauthServer.scope_private,
-      state: stateCode,
-    };
-    axios(options, querystring.stringify(body))
-      .then((response) => resolve(response.data))
-      .catch((error) => reject(error));
+    axios(options)
+      .then((response) => {
+        console.log(
+          "getOauthToken (resolve): ",
+          JSON.stringify(response.data),
+          JSON.stringify(options),
+          "\n"
+        );
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.log(
+          "getOauthToken (reject): ",
+          JSON.stringify(error),
+          JSON.stringify(options),
+          "\n"
+        );
+        reject(error);
+      });
   });
 }
 
@@ -130,14 +167,17 @@ async function singleSelectCustomerBasicData({
   access_token,
   id_token,
   llave_simetrica,
+  userName,
 }) {
   return new Promise((resolve, reject) => {
-    const data = createEntity("customer");
-    // eslint-disable-next-line dot-notation
-    data.customer["systemUser"] = {
-      userName: encryptDataDiners(getUsername()),
+    const data = {
+      customer: {
+        "@name": "customer",
+        systemUser: {
+          userName: encryptDataDiners(userName),
+        },
+      },
     };
-
     const options = {
       method: "POST",
       url: `${process.env.DIRECTOR_CORE_BANCA_URL}/singleSelectCustomerBasicData`,
@@ -156,8 +196,24 @@ async function singleSelectCustomerBasicData({
       data,
     };
     axios(options)
-      .then((response) => resolve(response.data))
-      .catch((error) => reject(error));
+      .then((response) => {
+        console.log(
+          "singleSelectCustomerBasicData (resolve): ",
+          JSON.stringify(response.data),
+          JSON.stringify(options),
+          "\n"
+        );
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.log(
+          "singleSelectCustomerBasicData (reject): ",
+          JSON.stringify(error),
+          JSON.stringify(options),
+          "\n"
+        );
+        reject(error);
+      });
   });
 }
 
@@ -166,19 +222,30 @@ async function singleSelectCustomerBasicData({
  * @param {*} params
  * @returns - { dataExecutionTransaction: { concept, resultString, executionTransactionStatus: {} } }
  */
-async function verifyCustomerIpBlocked({ access_token, id_token }) {
+
+function decryptUsername(access_token) {
+  const tokenData = jwtDecode(access_token);
+  if (
+    tokenData &&
+    tokenData.preferred_username &&
+    tokenData.preferred_username.toString
+  ) {
+    return tokenData.preferred_username.toString();
+  }
+  return "";
+}
+
+async function verifyCustomerIpBlocked({ access_token, id_token, userName }) {
   return new Promise((resolve, reject) => {
-    let data = createEntity("customer");
-    data = {
-      ...data,
+    const data = {
       customer: {
-        ...data.customer,
+        "@name": "customer",
         "@dataModel": "diners.financials",
         "@version": "1.0",
         originCustomer: { shortDesc: "PBN" },
         systemUser: {
-          password: encryptDataDiners(getPassword()),
-          userName: getUsername(),
+          // password: encryptDataDiners(getPassword()),
+          userName,
         },
       },
     };
@@ -186,7 +253,6 @@ async function verifyCustomerIpBlocked({ access_token, id_token }) {
       method: "POST",
       url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/verifyCustomerIpBlocked`,
       headers: {
-        "accept-language": "es-419,es;q=0.9",
         "content-type": "application/json",
         accept: "application/json",
         access_token,
@@ -200,27 +266,42 @@ async function verifyCustomerIpBlocked({ access_token, id_token }) {
     };
 
     axios(options)
-      .then((response) => resolve(response.data))
-      .catch((error) => reject(error));
+      .then((response) => {
+        console.log(
+          "verifyCustomerIpBlocked (resolve): ",
+          JSON.stringify(response.data),
+          JSON.stringify(options),
+          "\n"
+        );
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.log(
+          "verifyCustomerIpBlocked (reject): ",
+          JSON.stringify(error),
+          JSON.stringify(options),
+          "\n"
+        );
+        reject(error);
+      });
   });
 }
-
-// ...
-// ...
-// ...
 
 /**
  * (DIRECTOR_CORE_TARJETAS_URL) singleSelectTaskDevice
  * @param {*} params
  * @returns - { dataExecutionTransaction: { coreReferenceNumber, coreResultString }, device: { active } }
  */
-async function singleSelectTaskDevice({ access_token, id_token, customerId }) {
+async function singleSelectTaskDevice({
+  access_token,
+  id_token,
+  customerId,
+  deviceFp = null,
+}) {
   return new Promise((resolve, reject) => {
-    let data = createEntity("customer");
-    data = {
-      ...data,
+    const data = {
       customer: {
-        ...data.customer,
+        "@name": "customer",
         "@dataModel": "diners.financials",
         "@version": "1.0",
         originCustomer: { shortDesc: "PBN" },
@@ -230,7 +311,7 @@ async function singleSelectTaskDevice({ access_token, id_token, customerId }) {
         "@name": "device",
         "@dataModel": "productv2.financials",
         "@version": "1.0",
-        sDeviceId: undefined,
+        sDeviceId: deviceFp,
       },
     };
     const options = {
@@ -249,22 +330,43 @@ async function singleSelectTaskDevice({ access_token, id_token, customerId }) {
       },
       data,
     };
-
     axios(options)
-      .then((response) => resolve(response.data))
-      .catch((error) => reject(error));
+      .then((response) => {
+        console.log(
+          "singleSelectTaskDevice (resolve): ",
+          JSON.stringify(response.data),
+          JSON.stringify(options),
+          "\n"
+        );
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.log(
+          "singleSelectTaskDevice (reject): ",
+          JSON.stringify(error),
+          JSON.stringify(options),
+          "\n"
+        );
+        reject(error);
+      });
   });
 }
 
-async function massiveSelectProductOptionsToOffer(
-  accessToken,
-  idToken,
-  customerId
-) {
+async function massiveSelectProductOptionsToOffer({
+  access_token,
+  id_token,
+  customerId,
+}) {
   return new Promise((resolve, reject) => {
-    const data = createEntity("customer");
-    data.customer["customerId"] = customerId;
-
+    const data = {
+      customer: {
+        "@name": "customer",
+        "@version": "1.0",
+        "@dataModel": "diners.financials",
+        originCustomer: { shortDesc: "PBN" },
+        customerId,
+      },
+    };
     const options = {
       url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/massiveSelectProductOptionsToOffer`,
       method: "POST",
@@ -272,8 +374,8 @@ async function massiveSelectProductOptionsToOffer(
         channel: "kon",
         "Content-Type": "application/json",
         grant_type: oauthServer.grant_type_public,
-        access_token: accessToken,
-        id_token: idToken,
+        access_token,
+        id_token,
         feature_id: "ROL@5509", // ***
         func_type: "DPC", // ***
         pagination_info: "cantRegistros=20;numTotalPag=1;numPagActual=1;",
@@ -282,17 +384,30 @@ async function massiveSelectProductOptionsToOffer(
     };
     axios(options)
       .then((response) => {
+        console.log(
+          "massiveSelectProductOptionsToOffer (resolve): ",
+          JSON.stringify(response.data),
+          JSON.stringify(options),
+          "\n"
+        );
         resolve(response.data);
       })
       .catch((error) => {
+        console.log(
+          "massiveSelectProductOptionsToOffer (reject): ",
+          JSON.stringify(error),
+          JSON.stringify(options),
+          "\n"
+        );
         reject(error);
       });
   });
 }
 
 module.exports = {
-  getUsername,
-  getPassword,
+  // getUsername,
+  // getPassword,
+  decryptUsername,
 
   directorDateTime,
   singleSelectPublicKey,

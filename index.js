@@ -1,3 +1,4 @@
+/* eslint-disable no-nested-ternary */
 /* eslint-disable max-len */
 // Copyright (c) Alex Ellis 2021. All rights reserved.
 // Copyright (c) OpenFaaS Author(s) 2021. All rights reserved.
@@ -7,6 +8,7 @@ const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
 const morgan = require('morgan');
+const Fingerprint = require('express-fingerprint');
 
 require('module-alias/register');
 
@@ -24,22 +26,20 @@ global.DEBUG_LEVEL = /^\d+$/.test(process.env.DEBUG_LEVEL)
 
 // eslint-disable-next-line no-console
 console.log('debug level', global.DEBUG_LEVEL);
+
 logger.init();
 sentry.init();
 utils.init();
 
-const defaultMaxSize = '100kb'; // body-parser default
-
 app.disable('x-powered-by');
 
-const rawLimit = process.env.MAX_RAW_SIZE || defaultMaxSize;
-const jsonLimit = process.env.MAX_JSON_SIZE || defaultMaxSize;
+const rawLimit = process.env.MAX_RAW_SIZE || '100kb';
+const jsonLimit = process.env.MAX_JSON_SIZE || '100kb';
 
 // The request handler must be the first middleware on the app
 app.use(global.Sentry.Handlers.requestHandler());
+
 app.use((req, res, next) => {
-  // When no content-type is given, the body element is set to
-  // nil, and has been a source of contention for new users.
   if (!req.headers['content-type']) {
     req.headers['content-type'] = 'text/plain';
   }
@@ -59,18 +59,19 @@ app.set('view engine', 'ejs');
 
 app.use(
   morgan(
+    // eslint-disable-next-line no-unused-vars
     (tokens, req, res) => [
-      tokens.method(req, res),
-      tokens.url(req, res),
-      tokens.status(req, res),
-      // eslint-disable-next-line no-nested-ternary
-      global.DEBUG_LEVEL > 1
-        ? JSON.stringify(req.body)
-        : req.body && req.body.id && req.body.type
-          ? JSON.stringify({ type: req.body.type, id: req.body.id })
-          : JSON.stringify(req.body),
-      tokens['response-time'](req, res),
-      'ms',
+      '-------------------',
+      // tokens.method(req, res),
+      // tokens.url(req, res),
+      // tokens.status(req, res),
+      // global.DEBUG_LEVEL > 1
+      //   ? JSON.stringify(req.body)
+      //   : req.body && req.body.id && req.body.type
+      //     ? JSON.stringify({ type: req.body.type, id: req.body.id })
+      //     : JSON.stringify(req.body),
+      // tokens['response-time'](req, res),
+      // 'ms',
     ].join(' '),
     {
       skip: req => req.body.password,
@@ -78,8 +79,18 @@ app.use(
   ),
 );
 
-const port = process.env.http_port || 3000;
+// Inject fingerprint to request
+app.use(
+  Fingerprint({
+    parameters: [
+      Fingerprint.useragent,
+      Fingerprint.acceptHeaders,
+      Fingerprint.geoip,
+    ],
+  }),
+);
 
+const port = process.env.http_port || 3000;
 app.listen(port, () => {
   global.logger.info({
     message: `Listening on port: ${port}`,

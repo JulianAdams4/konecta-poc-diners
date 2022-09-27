@@ -7,8 +7,6 @@
     <title>Entry Point</title>
   </head>
 
-  <a href="http://localhost:3000/session/get-initialize" target="_blank">Click me</a>
-
   <body>
     <% if (href) { %>
     <script>
@@ -25,15 +23,11 @@
             link.href = "<%= JSON.stringify(href) %> ";
             document.body.appendChild(link);
             link.click();
-            // window.setTimeout(() => {
-            // }, 3000);
           }
           // All other browsers can use the standard window.location.href
           // (they don't lose HTTP_REFERER like Internet Explorer 8 & lower does)
           else {
             window.location = "<%= JSON.stringify(href) %>";
-            // window.setTimeout(() => {
-            // }, 3000);
           }
         },
         false

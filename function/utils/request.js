@@ -16,7 +16,16 @@ function parseReqParams(req) {
  */
 function saveInContextData(req, key, value) {
   const keys = `body.context.data.${key}`.split(".");
-  updateNested(req, keys, () => [value]);
+  if (getNestedProperty(keys, req)) {
+    // Si existe la actualiza
+    updateNested(req, keys, () => [value]);
+  } else {
+    // Si no existe la crea
+    updateNested(req, ["body", "context", "data"], (prevData) => ({
+      ...prevData,
+      [key]: [value],
+    }));
+  }
 }
 
 /**

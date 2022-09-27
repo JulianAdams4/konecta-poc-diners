@@ -1,3 +1,4 @@
+/* eslint-disable dot-notation */
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable camelcase */
 /* eslint-disable import/no-unresolved */
@@ -138,16 +139,16 @@ const publicRSAKey =
   "oQIDAQAB" +
   "-----END PUBLIC KEY-----";
 
-let keyEncripted = "";
-let key = "";
-let publicKey = "";
+global["keyEncripted"] = "";
+global["key"] = "";
+global["publicKey"] = "";
 
 function getKey() {
   return String(CryptoJS.lib.WordArray.random(16));
 }
 
 function setPublicKey(publicKeyParam) {
-  publicKey = publicKeyParam;
+  global.publicKey = publicKeyParam;
 }
 
 function encryptTextDiners(publicKeyParam, text) {
@@ -161,9 +162,9 @@ function encryptTextDiners(publicKeyParam, text) {
 }
 
 function getKeyDiners() {
-  if (key === "" || key === undefined) {
-    key = getKey();
-    keyEncripted = encryptTextDiners(publicKey, key);
+  if (!global.key) {
+    global.key = getKey();
+    global.keyEncripted = encryptTextDiners(global.publicKey, global.key);
   }
 }
 
@@ -172,7 +173,7 @@ function encryptDataDiners(value, keyParam = null) {
     getKeyDiners();
   }
   const simetricKey = CryptoJS.enc.Utf8.parse(
-    keyParam === null ? key : keyParam
+    keyParam === null ? global.key : keyParam
   );
   // this is Base64-encoded encrypted data
   const encryptedData = CryptoJS.AES.encrypt(value, simetricKey, {
@@ -183,24 +184,24 @@ function encryptDataDiners(value, keyParam = null) {
 }
 
 function getKeyEncripted() {
-  if (key === "" || key === undefined) {
+  if (!global.key) {
     getKeyDiners();
   }
-  if (keyEncripted === "" || keyEncripted === undefined) {
-    keyEncripted = encryptTextDiners(publicKey, key);
+  if (!global.keyEncripted) {
+    global.keyEncripted = encryptTextDiners(global.publicKey, global.key);
   }
-  return keyEncripted;
+  return global.keyEncripted;
 }
 
 function getPublicKeyEncripted(publicKeyParam, keyParam = null) {
-  if (key === "" || key === undefined) {
-    key = getKey();
+  if (global.key === "" || global.key === undefined) {
+    global.key = getKey();
   }
-  keyEncripted = encryptTextDiners(
+  global.keyEncripted = encryptTextDiners(
     publicKeyParam,
-    keyParam === null ? key : keyParam
+    keyParam === null ? global.key : keyParam
   );
-  return keyEncripted;
+  return global.keyEncripted;
 }
 
 module.exports = {
@@ -214,6 +215,7 @@ module.exports = {
   getStateCode,
   getVerifierCode,
   generateCodeChallenge,
+  getDeadlineMs,
   // ..
   saveOauthTokenResponse,
   getKey,

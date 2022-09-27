@@ -19,8 +19,12 @@
     "ejs": "3.1.8",
     "express": "4.16.2",
     "express-basic-auth": "1.2.1",
+    "express-fingerprint": "1.2.2",
+    "jwt-decode": "3.1.2",
+    "lokijs": "1.5.12",
     "module-alias": "2.2.2",
     "morgan": "1.10.0",
+    "nanoid": "^2.1.9",
     "node-jsencrypt": "1.0.0",
     "winston": "3.3.3",
     "winston-transport": "4.4.0"
