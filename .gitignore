@@ -1,0 +1,9 @@
+/build
+**/node_modules
+/node_modules
+/node_modules/**
+/template/**/template
+/template/**/node_modules
+stack.yaml
+stack.yml
+**/.DS_Store

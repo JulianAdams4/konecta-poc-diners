@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "Api/*": ["./api/*"],
+      "Controllers/*": ["./controllers/*"],
+      "Middlewares/*": ["./middlewares/*"],
+      "Routes/*": ["./routes/*"],
+      "Utils/*": ["./utils/*"]
+    }
+  }
+}
