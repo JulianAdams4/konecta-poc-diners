@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "CLIENT_ID_PRIVATE='api-clients' CLIENT_ID_PUBLIC='banca-personas-web' CLIENT_SECRET_PRIVATE='**********' CLIENT_SECRET_PUBLIC='' DEFAULT_OAUTH_PASSWORD='Interdin.1' DEFAULT_OAUTH_USERNAME='dcuero2020' GRANT_TYPE_PRIVATE='client_credentials' GRANT_TYPE_PUBLIC='authorization_code' GRANT_TYPE_REFRESH_TOKEN='' OAUTH_AUTH_SERVER='http://10.12.0.7:8080/auth/realms/DinersClub/protocol/openid-connect/auth' OAUTH_REDIRECT_URI='https://tec-digital-konecta-dev.technisys.net/api/faas/function/poc-ec-diners-konecta/session/get-callback' OAUTH_SERVER_LOGOUT='http://10.12.0.7:8080/auth/realms/DinersClub/protocol/openid-connect/logout?redirect_uri=https://tec-konecta-demo.technisys.net/iframe/?botId=630cb5a03872b7bb0b011e07' OAUTH_SERVER_URL='http://10.12.0.7:8080/auth/realms/DinersClub/protocol/openid-connect/token' URL='https://tec-digital-konecta-dev.technisys.net/api/faas/function/poc-ec-diners-konecta' DIRECTOR_ARCHIVOS_URL='https://director.dce.ec/des/banca' DIRECTOR_CORE_BANCA_URL='http://10.12.0.9:8093/directorCoreBanca/v1' DIRECTOR_CORE_TARJETAS_URL='http://10.12.0.9:8092/directorCoreTarjetas/v1' DIRECTOR_DIGITAL_URL='http://10.12.0.9:8091/directorPerfilamiento/v1' SCOPE_PRIVATE='openid' node index.js",
+    "start": "node index.js",
     "test": "echo \"Error: no tests specified\" && exit 0",
     "lint": "eslint '**/*.js' --quiet --fix"
   },
@@ -19,7 +19,7 @@
     "crypto-js": "4.1.1",
     "ejs": "3.1.8",
     "express": "4.16.2",
-    "express-basic-auth": "1.2.0",
+    "express-basic-auth": "1.2.1",
     "express-fingerprint": "1.2.2",
     "jwt-decode": "3.1.2",
     "lokijs": "1.5.12",
@@ -34,5 +34,9 @@
     "eslint": "5.16.0",
     "eslint-config-airbnb-base": "13.1.0",
     "eslint-plugin-import": "2.16.0"
+  },
+  "engines": {
+    "npm": "8.19.x",
+    "node": "16.x"
   }
 }

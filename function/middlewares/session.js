@@ -47,7 +47,6 @@ router.use("*", (req, res, next) => {
       pendingPath: req.originalUrl,
       dropSession: true,
     });
-    // return res.redirect(oauthServer.oauth_server_logout);
   }
 
   if (hasExpiredSession(req)) {
@@ -58,7 +57,6 @@ router.use("*", (req, res, next) => {
       pendingPath: req.originalUrl,
       dropSession: true,
     });
-    // return res.redirect(oauthServer.oauth_server_logout);
   }
 
   return next();

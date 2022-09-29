@@ -44,35 +44,55 @@ const {
 
 const dbSessions = db.collection;
 
-function buildSignInLink({ body, pendingPath, dropSession }) {
-  const workflowId = nanoid();
-  const responses = [
-    {
-      platforms: ["all"],
-      responseText: dropSession
-        ? texts.changedSessionExplanationText
-        : texts.signinExplanationText,
-      responseOptions: [
+async function buildSignInLink({ body, pendingPath, dropSession }) {
+  const context = buildContext((body && body.context) || {});
+  try {
+    const workflowId = nanoid();
+    updateNested(context, ["data"], () => ({
+      [contextKeys._pending_path]: [pendingPath],
+    }));
+    dbSessions.insert({
+      key: workflowId,
+      value: { callback: body.callback, initialContext: context },
+    });
+    const singInTextResponse = dropSession
+      ? texts.changedSessionExplanationText
+      : texts.signinExplanationText;
+    const singInUrl = `${process.env.URL}/session/get-initialize?workflowId=${workflowId}`;
+    const cbRes = await callback(
+      body.callback,
+      [
         {
-          type: "url",
-          text: texts.signinButtonText,
-          payload: `${process.env.URL}/session/get-initialize?workflowId=${workflowId}`,
+          platforms: channels,
+          responseText: singInTextResponse,
+          responseOptions: [
+            {
+              type: "url",
+              text: texts.signinButtonText,
+              payload: singInUrl,
+            },
+          ],
         },
       ],
-    },
-  ];
-  const context = buildContext((body && body.context) || {});
-  updateNested(context, ["data"], () => ({
-    [contextKeys._pending_path]: [pendingPath],
-  }));
-
-  // Save first callback
-  dbSessions.insert({
-    key: workflowId,
-    value: { callback: body.callback },
-  });
-
-  return callback(body.callback, responses, context);
+      context
+    );
+    console.log(`\ncbRes: ${JSON.stringify(cbRes)}\n`);
+    return cbRes;
+  } catch (error) {
+    if (body.callback && body.callback.baseUrl) {
+      await callback(
+        body.callback,
+        [
+          {
+            platforms: channels,
+            responseText: error,
+          },
+        ],
+        context
+      );
+    }
+    return null;
+  }
 }
 
 async function HandleEntrypoint(req, res) {
@@ -84,7 +104,7 @@ async function HandleEntrypoint(req, res) {
     const prevData = dbSessions.findOne({ key: workflowId });
     if (!prevData || !prevData.value) {
       global.logger.error({
-        message: "[1] Se perdió el workflowId",
+        message: "[1] Se perdió el workflowId en HandleEntrypoint",
         label: global.getLabel(__dirname, __filename),
       });
       return res
@@ -93,25 +113,6 @@ async function HandleEntrypoint(req, res) {
           '<script type="text/javascript">alert("Se perdió la conexión con el asistente");window.close();</script>'
         );
     }
-    /*
-    if (prevData.value.usedLink) {
-      const expiredLinkResponseText =
-        "El link para iniciar sesión ha expirado. Por favor intente nuevamente";
-      await callback(
-        prevData.value.callback,
-        [
-          {
-            platforms: channels,
-            responseText: expiredLinkResponseText,
-          },
-        ],
-        buildContext({})
-      );
-      return res
-        .status(200)
-        .send('<script type="text/javascript">window.close();</script>');
-    }
-    */
 
     const stateCode = getStateCode();
     const codeVerifier = getVerifierCode();
@@ -136,7 +137,6 @@ async function HandleEntrypoint(req, res) {
       linkValue.searchParams.append(key, queryParams[key]);
     });
 
-    // prevData.value.usedLink = true;
     prevData.value.state = stateCode;
     prevData.value.code_challenge = challenge;
     prevData.value.code_verifier = codeVerifier;
@@ -148,7 +148,7 @@ async function HandleEntrypoint(req, res) {
     return res.redirect(linkValue.href);
   } catch (error) {
     global.logger.error({
-      message: "[2] Ocurrió un error al crear el challenge",
+      message: `[2] Ocurrió un error al crear el challenge: ${error.toString()}`,
       label: global.getLabel(__dirname, __filename),
     });
     return res
