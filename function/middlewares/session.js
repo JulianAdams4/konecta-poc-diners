@@ -1,7 +1,5 @@
-/* eslint-disable import/no-unresolved */
-
 const router = require("express").Router();
-const { SessionController } = require("Controllers");
+const { SessionController } = require("../controllers");
 const {
   isPublicRoute,
   hasNoSession,

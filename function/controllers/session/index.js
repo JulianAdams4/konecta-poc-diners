@@ -1,8 +1,8 @@
+/* eslint-disable import/order */
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable no-unused-vars */
 /* eslint-disable camelcase */
-/* eslint-disable import/no-unresolved */
 
 const crypto = require("crypto");
 const base64url = require("base64url");
@@ -17,21 +17,21 @@ const {
   singleSelectTaskDevice,
   massiveSelectProductOptionsToOffer,
   decryptUsername,
-} = require("Api");
-const { callback } = require("Controllers/konecta");
+} = require("../../api");
+const { callback } = require("../konecta");
 const {
   oauthServer,
   texts,
   contextKeys,
   channels,
-} = require("Utils/constants");
+} = require("../../utils/constants");
 const {
   updateNested,
   convertObjectPropertyToArray,
   getNestedProperty,
-} = require("Utils/json");
+} = require("../../utils/json");
 
-const db = require("Utils/database")("sessions.db");
+const db = require("../../utils/database")("sessions.db");
 
 const {
   buildContext,

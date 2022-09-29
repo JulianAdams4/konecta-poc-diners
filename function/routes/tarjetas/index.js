@@ -1,7 +1,7 @@
 /* eslint-disable import/no-unresolved */
 const router = require("express").Router();
 
-const { TarjetasController } = require("Controllers");
+const { TarjetasController } = require("../../controllers");
 
 router.get(
   "ofertasvalor",

@@ -1,14 +1,14 @@
-/* eslint-disable import/no-unresolved */
+/* eslint-disable import/order */
 /* eslint-disable camelcase */
-const { massiveSelectProductOptionsToOffer } = require("Api");
-const { callback } = require("Controllers/konecta");
-const { buildContext } = require("Controllers/_helpers");
-const { contextKeys, channels } = require("Utils/constants");
+const { massiveSelectProductOptionsToOffer } = require("../../api");
+const { callback } = require("../konecta");
+const { buildContext } = require("../_helpers");
+const { contextKeys, channels } = require("../../utils/constants");
 const {
   convertObjectPropertyToArray,
   getNestedProperty,
-} = require("Utils/json");
-const { getFromContextData } = require("Utils/request");
+} = require("../../utils/json");
+const { getFromContextData } = require("../../utils/request");
 
 async function HandleMassiveSelectProductOptionsToOffer(req, res) {
   res.sendStatus(204); // send 200 OK as soon as possible.

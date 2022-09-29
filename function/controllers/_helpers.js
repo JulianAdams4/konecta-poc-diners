@@ -1,16 +1,16 @@
+/* eslint-disable import/order */
 /* eslint-disable dot-notation */
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable camelcase */
-/* eslint-disable import/no-unresolved */
 
 const crypto = require("crypto");
 const base64url = require("base64url");
 const CryptoJS = require("crypto-js");
 const JSEncrypt = require("node-jsencrypt");
 
-const { contextKeys } = require("Utils/constants");
-const { getNestedProperty } = require("Utils/json");
-const { saveInContextData } = require("Utils/request");
+const { contextKeys } = require("../utils/constants");
+const { getNestedProperty } = require("../utils/json");
+const { saveInContextData } = require("../utils/request");
 
 function buildContext(context) {
   const newContext = JSON.parse(JSON.stringify(context));

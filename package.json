@@ -34,12 +34,5 @@
     "eslint": "5.16.0",
     "eslint-config-airbnb-base": "13.1.0",
     "eslint-plugin-import": "2.16.0"
-  },
-  "_moduleAliases": {
-    "Api": "./function/api",
-    "Controllers": "./function/controllers",
-    "Middlewares": "./function/middlewares",
-    "Routes": "./function/routes",
-    "Utils": "./function/utils"
   }
 }

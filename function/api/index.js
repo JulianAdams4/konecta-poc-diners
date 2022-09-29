@@ -6,8 +6,8 @@ const axios = require("axios");
 const jwtDecode = require("jwt-decode");
 const querystring = require("querystring");
 
-const { encryptDataDiners } = require("Controllers/_helpers");
-const { oauthServer } = require("Utils/constants");
+const { encryptDataDiners } = require("../controllers/_helpers");
+const { oauthServer } = require("../utils/constants");
 
 async function directorDateTime() {
   return new Promise((resolve, reject) => {

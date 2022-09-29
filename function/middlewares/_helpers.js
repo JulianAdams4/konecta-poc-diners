@@ -1,10 +1,9 @@
 /* eslint-disable camelcase */
 /* eslint-disable no-underscore-dangle */
-/* eslint-disable import/no-unresolved */
-const { publicPatters, contextKeys } = require("Utils/constants");
-const { parseReqParams, getFromContextData } = require("Utils/request");
+const { publicPatters, contextKeys } = require("../utils/constants");
+const { parseReqParams, getFromContextData } = require("../utils/request");
 
-const db = require("Utils/database")("sessions.db");
+const db = require("../utils/database")("sessions.db");
 
 const dbSessions = db.collection;
 

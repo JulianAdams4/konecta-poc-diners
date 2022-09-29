@@ -1,8 +1,7 @@
-/* eslint-disable import/no-unresolved */
 /* eslint-disable no-underscore-dangle */
 
 const axios = require("axios");
-const { getCircularReplacer } = require("Utils/json");
+const { getCircularReplacer } = require("../../utils/json");
 
 /**
  * It sends a response to the user
