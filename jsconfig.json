@@ -2,11 +2,11 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "Api/*": ["./function/api/*"],
-      "Controllers/*": ["./function/controllers/*"],
-      "Middlewares/*": ["./function/middlewares/*"],
-      "Routes/*": ["./function/routes/*"],
-      "Utils/*": ["./function/utils/*"]
+      "Api/*": ["./api/*"],
+      "Controllers/*": ["./controllers/*"],
+      "Middlewares/*": ["./middlewares/*"],
+      "Routes/*": ["./routes/*"],
+      "Utils/*": ["./utils/*"]
     }
   }
 }
