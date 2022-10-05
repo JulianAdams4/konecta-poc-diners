@@ -1,47 +1,114 @@
-/* eslint-disable import/order */
 /* eslint-disable camelcase */
-const { massiveSelectProductOptionsToOffer } = require("../../api");
-const { callback } = require("../konecta");
-const { buildContext } = require("../_helpers");
-const { contextKeys, channels } = require("../../utils/constants");
-const {
-  convertObjectPropertyToArray,
-  getNestedProperty,
-} = require("../../utils/json");
+/* eslint-disable prefer-destructuring */
+
+const url = require("url");
+
+const { channels } = require("../../utils/constants");
+const JsonUtils = require("../../utils/json");
 const { getFromContextData } = require("../../utils/request");
+const { callback, formTextResponse } = require("../konecta");
+const { buildContext } = require("../_helpers");
+const API = require("../../api");
+
+const db = require("../../utils/database")("sessions.db");
+
+const dbSessions = db.collection;
 
 async function HandleMassiveSelectProductOptionsToOffer(req, res) {
-  res.sendStatus(204); // send 200 OK as soon as possible.
+  let requestContext = null;
+  let requestCallback = null;
+  try {
+    const urlParts = url.parse(req.url, true);
+    const queryWorkflowId = urlParts.query.workflowId;
+    const contextWorkflowId = getFromContextData(req, "workflowId");
+    const workflowId = contextWorkflowId || queryWorkflowId;
 
-  const customerId = "3#0100256361001"; // ***
-  const accessToken = getFromContextData(req, contextKeys.access_token);
-  const idToken = getFromContextData(req, contextKeys.id_token);
+    const prevData = dbSessions.findOne({ key: workflowId });
+    if (!prevData || !prevData.value || !prevData.value.callback) {
+      global.logger.error({
+        message: "Se perdió el workflowId",
+        label: global.getLabel(__dirname, __filename),
+      });
+      return res.sendStatus(200);
+    }
+    requestCallback = prevData.value.callback;
+    requestContext = prevData.value.initialContext;
 
-  const response = await massiveSelectProductOptionsToOffer(
-    accessToken,
-    idToken,
-    customerId
-  );
+    res.sendStatus(200); // send 200 OK as soon as possible.
 
-  const botResponse = { platforms: channels };
-  if (response && response.collection) {
-    const resp = convertObjectPropertyToArray("collection.product", response);
-    botResponse.responseText = resp.collection.product.reduce(
-      (str, prod, idx) => `${str}\n ${idx + 1}. ${prod.webTitle}`,
-      `Tienes ${resp.collection.product.length} oferta(s):`
+    await callback(
+      requestCallback,
+      formTextResponse(
+        channels,
+        "Obteniendo información de las ofertas. Por favor espere unos momentos ⏳"
+      ),
+      buildContext(requestContext || {})
     );
-  } else if (getNestedProperty("Detail.errors.error", response)) {
-    botResponse.responseText =
-      "Ocurrió un error al obtener la información. Intente nuevamente dentro de unos minutos";
-  } else {
-    botResponse.responseText =
-      "Ocurrió un error inesperado. Intente nuevamente.";
-  }
+    // *************************************
+    const id_token = prevData.value.id_token;
+    const customerId = prevData.value.customerId;
+    const access_token = prevData.value.access_token;
 
-  const context = buildContext(
-    getNestedProperty("body.message.context", req) || {}
-  );
-  return callback(req.body.callback, [botResponse], context);
+    const response6 = await API.massiveSelectProductOptionsToOffer({
+      access_token,
+      id_token,
+      customerId,
+    });
+    let offersResponseText = "";
+    if (response6 && response6.collection) {
+      const resp = JsonUtils.convertObjectPropertyToArray(
+        "collection.product",
+        response6
+      );
+      if (resp.collection.product.length) {
+        offersResponseText = [
+          `Tienes ${resp.collection.product.length} oferta(s):`,
+          resp.collection.product
+            .map((prod, idx) => `${idx + 1}.- ${prod.webTitle}`)
+            .join("\n"),
+        ].join("\n\n");
+      } else {
+        offersResponseText = "Por el momento no tienes ofertas de valor 🔎";
+      }
+    } else if (JsonUtils.getNestedProperty("Detail.errors.error", response6)) {
+      offersResponseText =
+        "Ocurrió un error al obtener la información. Intente nuevamente dentro de unos minutos 🔄";
+    } else {
+      offersResponseText =
+        "Ocurrió un error inesperado. Intente nuevamente ❗️";
+    }
+
+    return await callback(
+      requestCallback,
+      formTextResponse(channels, offersResponseText),
+      buildContext({})
+    );
+  } catch (ex) {
+    global.logger.error({
+      message: ex && ex.message ? ex.message : ex,
+      label: global.getLabel(__dirname, __filename),
+    });
+    if (!requestCallback) {
+      global.logger.error({
+        message: "No hay callback para responder",
+        label: global.getLabel(__dirname, __filename),
+      });
+      return res.sendStatus(200);
+    }
+    // Se puede responder
+    const lastContext = buildContext(requestContext || {});
+    await callback(
+      requestCallback,
+      formTextResponse(
+        channels,
+        "Ocurrió un error al procesar tu solicitud. Lamentamos el inconveniente"
+      ),
+      lastContext
+    );
+    return res.sendStatus(200);
+  }
 }
 
-module.exports = { HandleMassiveSelectProductOptionsToOffer };
+module.exports = {
+  HandleMassiveSelectProductOptionsToOffer,
+};

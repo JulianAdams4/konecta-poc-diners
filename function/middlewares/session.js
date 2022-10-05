@@ -2,6 +2,8 @@ const router = require("express").Router();
 const { SessionController } = require("../controllers");
 const {
   isPublicRoute,
+  isOauthRoute,
+  getOauthTimeout,
   hasNoSession,
   hasChangedState,
   hasExpiredSession,
@@ -9,26 +11,21 @@ const {
 
 router.use("*", (req, res, next) => {
   if (isPublicRoute(req)) {
-    global.logger.warn({
-      message: {
-        IgnoredPattern: true,
-        baseUrl: req.baseUrl,
-        BodyCallback: req.body.callback || {},
-        BodyContext: req.body.context || {},
-      },
-      label: global.getLabel(__dirname, __filename),
-    });
+    if (isOauthRoute(req)) {
+      // * Increase timeout only for OAuth routes
+      res.setTimeout(getOauthTimeout());
+    }
+    console.warn("[isPublicRoute]: ", req.originalUrl);
+    console.warn("   BodyCallback: ", JSON.stringify(req.body.callback || {}));
+    console.warn("   BodyContext:  ", JSON.stringify(req.body.context || {}));
+    console.warn("");
     return next();
   }
 
-  global.logger.info({
-    message: {
-      baseUrl: req.baseUrl,
-      BodyCallback: req.body.callback || {},
-      BodyContext: req.body.context || {},
-    },
-    label: global.getLabel(__dirname, __filename),
-  });
+  console.log("[Intern Route] - ", req.originalUrl);
+  console.log("   BodyCallback: ", JSON.stringify(req.body.callback || {}));
+  console.log("   BodyContext:  ", JSON.stringify(req.body.context || {}));
+  console.log("");
 
   if (hasNoSession(req)) {
     res.sendStatus(200);
@@ -59,6 +56,7 @@ router.use("*", (req, res, next) => {
     });
   }
 
+  res.setTimeout(getOauthTimeout());
   return next();
 });
 

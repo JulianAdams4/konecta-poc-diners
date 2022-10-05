@@ -81,9 +81,14 @@ function updateNested(object, keys, modify) {
   return update(object, head, (value) => updateNested(value, tail, modify));
 }
 
+function getFunctionName() {
+  return new Error().stack.match(/at (\S+)/g)[1].slice(3);
+}
+
 module.exports = {
   convertObjectPropertyToArray,
   getCircularReplacer,
   getNestedProperty,
   updateNested,
+  getFunctionName,
 };

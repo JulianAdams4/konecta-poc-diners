@@ -1,7 +1,9 @@
-/* eslint-disable camelcase */
-/* eslint-disable no-underscore-dangle */
-const { publicPatters, contextKeys } = require("../utils/constants");
-const { parseReqParams, getFromContextData } = require("../utils/request");
+const {
+  publicPatters,
+  oauthPatterns,
+  oauthServer,
+} = require("../utils/constants");
+const { getFromContextData } = require("../utils/request");
 
 const db = require("../utils/database")("sessions.db");
 
@@ -23,41 +25,34 @@ function isPublicRoute(req) {
 }
 
 /**
+ * Valida si la ruta solicitada pertenece al flujo del OAuth2
+ * @param {Object} req
+ * @returns {Boolean} boolean
+ */
+function isOauthRoute(req) {
+  // eslint-disable-next-line no-restricted-syntax
+  for (const pattern of oauthPatterns) {
+    if (req.originalUrl.includes(pattern)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getOauthTimeout() {
+  return oauthServer.redirect_callback_timeout_seg;
+}
+
+/**
  * Valida que tenga todos los atributos de una sesión activa y válida
  * @param {Object} req
  * @returns {Boolean} boolean
  */
 function hasNoSession(req) {
-  const prevData = dbSessions.findOne({
-    key: getFromContextData(req, contextKeys.state),
-  });
-  if (!prevData || !prevData.value) {
-    return true;
-  }
-  const reqAccessToken = prevData.value.access_token;
-  if (!reqAccessToken || typeof reqAccessToken !== "string") {
-    return true;
-  }
-  const reqState = prevData.value.state;
-  if (!reqState || typeof reqState !== "string") {
-    return true;
-  }
-  const reqSessionState = prevData.value.session_state;
-  if (!reqSessionState || typeof reqSessionState !== "string") {
-    return true;
-  }
-  const reqCode = prevData.value.code;
-  if (!reqCode || typeof reqCode !== "string") {
-    return true;
-  }
-  const reqTokenExpiration = prevData.value.expires_in;
-  if (!reqTokenExpiration || typeof reqTokenExpiration !== "string") {
-    return true;
-  }
-  const reqTokenDeadline = prevData.value.deadline;
-  if (!reqTokenDeadline || typeof reqTokenDeadline !== "string") {
-    return true;
-  }
+  const flowIdentifier = getFromContextData(req, "workflowId");
+  if (!flowIdentifier) return true;
+  const prevData = dbSessions.findOne({ key: flowIdentifier });
+  if (!prevData || !prevData.value) return true;
   return false;
 }
 
@@ -67,42 +62,46 @@ function hasNoSession(req) {
  * @returns {Boolean} boolean
  */
 function hasChangedState(req) {
-  const query = parseReqParams(req);
-  const stateFromQuery = query.state;
-  const stateFromContext = getFromContextData(req, contextKeys.state);
-  const state = stateFromQuery || stateFromContext;
-  if (!state) return true;
+  const flowIdentifier = getFromContextData(req, "workflowId");
+  const prevData = dbSessions.findOne({ key: flowIdentifier });
 
-  const sessionStateFromQuery = query.session_state;
-  const sessionStateFromContext = getFromContextData(
-    req,
-    contextKeys.session_state
-  );
-  const session_state = sessionStateFromQuery || sessionStateFromContext;
-  if (!session_state) return true;
-
-  const prevData = dbSessions.findOne({ key: state });
-  if (!prevData || !prevData.value) return true;
-
-  if (
-    state !== prevData.value.state ||
-    session_state !== prevData.value.session_state
-  ) {
+  let wasModified = { check: false, origin: "" };
+  const reqAccessToken = prevData.value.access_token;
+  if (!reqAccessToken || typeof reqAccessToken !== "string") {
+    wasModified = { check: true, origin: "access_token" };
+  }
+  const reqState = prevData.value.state;
+  if (!reqState || typeof reqState !== "string") {
+    wasModified = { check: true, origin: "state" };
+  }
+  const reqSessionState = prevData.value.session_state;
+  if (!reqSessionState || typeof reqSessionState !== "string") {
+    wasModified = { check: true, origin: "session_state" };
+  }
+  const reqCode = prevData.value.code;
+  if (!reqCode || typeof reqCode !== "string") {
+    wasModified = { check: true, origin: "code" };
+  }
+  const reqTokenExpiration = prevData.value.expires_in;
+  if (!reqTokenExpiration || typeof reqTokenExpiration !== "string") {
+    wasModified = { check: true, origin: "expires_in" };
+  }
+  const reqTokenDeadline = prevData.value.deadline;
+  if (!reqTokenDeadline || typeof reqTokenDeadline !== "string") {
+    wasModified = { check: true, origin: "deadline" };
+  }
+  if (wasModified.check) {
     global.logger.error({
-      message: {
-        baseUrl: req.baseUrl,
-        message: "Ha cambiado la sesion",
-        state: { prev: prevData.value.state, new: state },
-        session_state: {
-          prev: prevData.value.session_state,
-          new: session_state,
-        },
-      },
+      message: [
+        `Se intentó acceder a "${req.baseUrl}" con un error en la sesión`,
+        `El campo erróneo es [${wasModified.origin}: ${
+          prevData.value[wasModified.origin]
+        }]`,
+      ].join("\n"),
       label: global.getLabel(__dirname, __filename),
     });
     return true;
   }
-
   return false;
 }
 
@@ -112,14 +111,8 @@ function hasChangedState(req) {
  * @returns {Boolean} boolean
  */
 function hasExpiredSession(req) {
-  const query = parseReqParams(req);
-  const stateFromQuery = query.state;
-  const stateFromContext = getFromContextData(req, contextKeys.state);
-  const state = stateFromQuery || stateFromContext;
-  if (!state) return true;
-
-  const prevData = dbSessions.findOne({ key: state });
-  if (!prevData || !prevData.value) return true;
+  const flowIdentifier = getFromContextData(req, "workflowId");
+  const prevData = dbSessions.findOne({ key: flowIdentifier });
 
   const reqTokenDeadline = prevData.value.deadline;
   // eslint-disable-next-line radix
@@ -129,6 +122,8 @@ function hasExpiredSession(req) {
 
 module.exports = {
   isPublicRoute,
+  isOauthRoute,
+  getOauthTimeout,
   hasChangedState,
   hasNoSession,
   hasExpiredSession,

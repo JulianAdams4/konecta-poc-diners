@@ -1,7 +1,7 @@
 /* eslint-disable no-underscore-dangle */
 
 const axios = require("axios");
-const { getCircularReplacer } = require("../../utils/json");
+const { getCircularReplacer: replacer } = require("../../utils/json");
 
 /**
  * It sends a response to the user
@@ -15,9 +15,7 @@ async function callback(
   nextEvents
 ) {
   const params = _params || {};
-
   if (!params || !Object.keys(params).length) return null;
-
   const options = {
     method: "POST",
     url: `${params.baseUrl}/conversation/callback/${params._id}?token=${params.token}`,
@@ -33,35 +31,43 @@ async function callback(
       nextEvents,
     },
   };
-
   let responseCall = {};
   try {
     responseCall = await axios(options);
-    global.logger.info({
-      message: {
-        function: "Callback-To-Bot",
-        options: JSON.stringify(options, getCircularReplacer()),
-        status: responseCall.status,
-        data: responseCall.data,
-        error: null,
-      },
-      label: global.getLabel(__dirname, __filename),
-    });
-  } catch (ex) {
+    console.log("[Callback-To-Bot]");
+    console.log("   Options: ", JSON.stringify(options, replacer()));
+    console.log("   Status: ", responseCall.status);
+    console.log("   Data: ", JSON.stringify(responseCall.data));
+    console.log("   Error: NULL");
+  } catch (error) {
     // global.Sentry.captureException(ex);
-    global.logger.error({
-      message: {
-        function: "Callback-To-Bot",
-        options: JSON.stringify(options, getCircularReplacer()),
-        status: responseCall.status || 500,
-        data: null,
-        error: ex,
-      },
-      label: global.getLabel(__dirname, __filename),
-    });
+    console.error("[Callback-To-Bot]");
+    console.error("   Options: ", JSON.stringify(options, replacer()));
+    console.error("   Status: ", responseCall.status || 500);
+    console.error("   Data: NULL");
+    console.error("   Error: ", error.toString());
   }
-
   return null;
 }
 
-module.exports = { callback };
+function formLinkResponse(channels, description, linkText, linkUrl) {
+  return [
+    {
+      platforms: channels,
+      responseText: description,
+      responseOptions: [
+        {
+          type: "url",
+          text: linkText,
+          payload: linkUrl,
+        },
+      ],
+    },
+  ];
+}
+
+function formTextResponse(platforms, responseText) {
+  return [{ platforms, responseText }];
+}
+
+module.exports = { callback, formLinkResponse, formTextResponse };

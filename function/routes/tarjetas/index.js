@@ -3,7 +3,7 @@ const router = require("express").Router();
 
 const { TarjetasController } = require("../../controllers");
 
-router.get(
+router.post(
   "ofertasvalor",
   TarjetasController.HandleMassiveSelectProductOptionsToOffer
 );

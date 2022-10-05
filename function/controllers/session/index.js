@@ -1,93 +1,85 @@
 /* eslint-disable import/order */
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-underscore-dangle */
-/* eslint-disable no-unused-vars */
 /* eslint-disable camelcase */
 
-const crypto = require("crypto");
+const InBackground = require("child_process").fork;
 const base64url = require("base64url");
+const crypto = require("crypto");
 const nanoid = require("nanoid");
 const url = require("url");
 
+const API = require("../../api");
+const { callback, formLinkResponse, formTextResponse } = require("../konecta");
 const {
-  singleSelectPublicKey,
-  getOauthToken,
-  singleSelectCustomerBasicData,
-  verifyCustomerIpBlocked,
-  singleSelectTaskDevice,
-  massiveSelectProductOptionsToOffer,
-  decryptUsername,
-} = require("../../api");
-const { callback } = require("../konecta");
-const {
-  oauthServer,
-  texts,
-  contextKeys,
   channels,
+  oauthServer,
+  OtpMissingCodeMessage,
+  OtpVerificationMessages,
+  texts,
 } = require("../../utils/constants");
+const JsonUtils = require("../../utils/json");
 const {
-  updateNested,
-  convertObjectPropertyToArray,
-  getNestedProperty,
-} = require("../../utils/json");
-
-const db = require("../../utils/database")("sessions.db");
-
+  getResponseScriptTag,
+  getFromContextData,
+} = require("../../utils/request");
 const {
   buildContext,
+  getDeadlineMs,
+  getKeyEncripted,
   getStateCode,
   getVerifierCode,
-  getKeyEncripted,
-  getDeadlineMs,
   setPublicKey,
 } = require("../_helpers");
 
+const db = require("../../utils/database")("sessions.db");
+
 const dbSessions = db.collection;
 
-async function buildSignInLink({ body, pendingPath, dropSession }) {
-  const context = buildContext((body && body.context) || {});
+/**
+ * Response con link para iniciar sesión
+ * @param - { body, pendingPath, dropSession }
+ * @returns - {Promise}
+ */
+function buildSignInLink({ body, pendingPath, dropSession }) {
+  let context = null;
   try {
     const workflowId = nanoid();
-    updateNested(context, ["data"], () => ({
-      [contextKeys._pending_path]: [pendingPath],
+    context = buildContext((body && body.context) || {});
+    JsonUtils.updateNested(context, ["data"], (prevData) => ({
+      ...prevData,
+      workflowId: [workflowId],
+      pending_path: [pendingPath],
     }));
+    // ****************
     dbSessions.insert({
       key: workflowId,
-      value: { callback: body.callback, initialContext: context },
+      value: {
+        callback: body.callback,
+        initialContext: context,
+        pendingPath,
+      },
     });
+    // *********************
     const singInTextResponse = dropSession
       ? texts.changedSessionExplanationText
       : texts.signinExplanationText;
     const singInUrl = `${process.env.URL}/session/get-initialize?workflowId=${workflowId}`;
-    const cbRes = await callback(
+    return callback(
       body.callback,
-      [
-        {
-          platforms: channels,
-          responseText: singInTextResponse,
-          responseOptions: [
-            {
-              type: "url",
-              text: texts.signinButtonText,
-              payload: singInUrl,
-            },
-          ],
-        },
-      ],
+      formLinkResponse(
+        channels,
+        singInTextResponse,
+        texts.signinButtonText,
+        singInUrl
+      ),
       context
     );
-    console.log(`\ncbRes: ${JSON.stringify(cbRes)}\n`);
-    return cbRes;
   } catch (error) {
     if (body.callback && body.callback.baseUrl) {
-      await callback(
+      return callback(
         body.callback,
-        [
-          {
-            platforms: channels,
-            responseText: error,
-          },
-        ],
+        formTextResponse(channels, error.toString()),
         context
       );
     }
@@ -95,28 +87,32 @@ async function buildSignInLink({ body, pendingPath, dropSession }) {
   }
 }
 
+/**
+ * Inicia el proceso de OAuth2 + PKCE
+ * @param {Request} req
+ * @param {Response} res
+ * @returns {Promise} Promise
+ */
 async function HandleEntrypoint(req, res) {
+  let requestContext = null;
+  let requestCallback = null;
   try {
     const urlParts = url.parse(req.url, true);
-    const { query } = urlParts;
-    const workflowId = query.workflowId;
+    const workflowId = urlParts.query.workflowId;
 
     const prevData = dbSessions.findOne({ key: workflowId });
     if (!prevData || !prevData.value) {
       global.logger.error({
-        message: "[1] Se perdió el workflowId en HandleEntrypoint",
+        message: "No hay información para responder",
         label: global.getLabel(__dirname, __filename),
       });
-      return res
-        .status(200)
-        .send(
-          '<script type="text/javascript">alert("Se perdió la conexión con el asistente");window.close();</script>'
-        );
+      return res.sendStatus(200);
     }
+    requestCallback = prevData.value.callback;
+    requestContext = prevData.value.initialContext;
 
     const stateCode = getStateCode();
     const codeVerifier = getVerifierCode();
-
     const hash = await crypto
       .createHash("sha256")
       .update(codeVerifier)
@@ -130,7 +126,7 @@ async function HandleEntrypoint(req, res) {
       state: stateCode,
       code_challenge: challenge,
       code_challenge_method: "S256",
-      redirect_uri: `${oauthServer.oauth_redirect_uri}?workflowId=${workflowId}`, // ***
+      redirect_uri: `${oauthServer.oauth_redirect_uri}?workflowId=${workflowId}`,
       scope: oauthServer.scope_private,
     };
     Object.keys(queryParams).forEach((key) => {
@@ -145,26 +141,46 @@ async function HandleEntrypoint(req, res) {
     prevData.value.client_id = oauthServer.client_id_public;
     dbSessions.update(prevData);
 
-    return res.redirect(linkValue.href);
-  } catch (error) {
+    return res.redirect(302, linkValue.href);
+  } catch (ex) {
     global.logger.error({
-      message: `[2] Ocurrió un error al crear el challenge: ${error.toString()}`,
+      message: ex && ex.message ? ex.message : ex,
       label: global.getLabel(__dirname, __filename),
     });
-    return res
-      .status(200)
-      .send(
-        '<script type="text/javascript">alert("Ocurrió un error al iniciar sesión");window.close();</script>'
-      );
+    if (!requestCallback) {
+      global.logger.error({
+        message: "No hay callback para responder",
+        label: global.getLabel(__dirname, __filename),
+      });
+      return res.sendStatus(200);
+    }
+    // Se puede responder
+    const lastContext = buildContext(requestContext || {});
+    await callback(
+      requestCallback,
+      formTextResponse(
+        channels,
+        "Ocurrió un error al procesar tu solicitud. Lamentamos el inconveniente"
+      ),
+      lastContext
+    );
+    return res.sendStatus(200);
   }
 }
 
+/**
+ * Maneja la parte final del proceso de OAuth2 + PKCE.
+ * LLama al servicio BasicData
+ * @param {Request} req
+ * @param {Response} res
+ * @returns {Promise} Promise
+ */
 async function HandleCallback(req, res) {
   let requestCallback = null;
+  let requestContext = null;
   try {
     const urlParts = url.parse(req.url, true);
     const { query } = urlParts;
-
     if (
       !query.workflowId ||
       !query.state ||
@@ -173,73 +189,68 @@ async function HandleCallback(req, res) {
     ) {
       // No hay params
       global.logger.error({
-        message: "[1] La URL de redireccion no tiene los parametros necesarios",
+        message: "La URL de redireccion no tiene los parametros necesarios",
         label: global.getLabel(__dirname, __filename),
       });
-      return res
-        .status(200)
-        .send(
-          '<script type="text/javascript">alert("Falló al obtener la sesión");window.close();</script>'
-        );
+      global.logger.error({
+        message: "No hay callback para responder",
+        label: global.getLabel(__dirname, __filename),
+      });
+      return res.status(200).send(getResponseScriptTag());
     }
 
     const workflowId = query.workflowId;
     const prevData = dbSessions.findOne({ key: workflowId });
-    if (!prevData || !prevData.value) {
+    if (!prevData || !prevData.value || !prevData.value.callback) {
       global.logger.error({
-        message: "[2] No hay informacion para responder",
+        message: "No hay información para responder",
         label: global.getLabel(__dirname, __filename),
       });
-      return res
-        .status(200)
-        .send(
-          '<script type="text/javascript">alert("Se perdió la conexión con el asistente");window.close();</script>'
-        );
+      return res.sendStatus(200);
     }
-
     requestCallback = prevData.value.callback;
-    if (!requestCallback) {
-      global.logger.error({
-        message: "[3] No hay callback para responder",
-        label: global.getLabel(__dirname, __filename),
-      });
-      return res
-        .status(200)
-        .send(
-          '<script type="text/javascript">alert("No fue posible responder al asistente");window.close();</script>'
-        );
-    }
-
+    requestContext = prevData.value.initialContext;
+    // ********************************************
     const prevCode = prevData.value.code;
     const prevState = prevData.value.state;
     const prevSessionState = prevData.value.session_state;
-
     if (!prevCode) prevData.value.code = query.code;
     if (!prevState) prevData.value.state = query.state;
     if (!prevSessionState) prevData.value.session_state = query.session_state;
     dbSessions.update(prevData);
-
-    // Close window here?
-
     // ********************************************
-    const response1 = await singleSelectPublicKey();
-    if (response1 && response1.publicKey && response1.publicKey.publicKey) {
+    const response1 = await API.singleSelectPublicKey();
+    if (JsonUtils.getNestedProperty("publicKey.publicKey", response1)) {
       setPublicKey(response1.publicKey.publicKey);
+    } else {
+      global.logger.error({
+        message: JsonUtils.getNestedProperty(
+          "Detail.errors.error.detail",
+          response1
+        ),
+        label: global.getLabel(__dirname, __filename),
+      });
+      await callback(
+        requestCallback,
+        formTextResponse(
+          channels,
+          "Ocurrió un error inesperado. Por favor intente dentro de unos minutos."
+        ),
+        buildContext(requestContext || {})
+      );
+      return res.sendStatus(200);
     }
     // ********************************************
     let userName = "";
-    let codeVerifier = "";
-    if (prevData && prevData.value) {
-      codeVerifier = prevData.value.code_verifier;
-    }
-    const response2 = await getOauthToken({
+    const codeVerifier = prevData.value.code_verifier;
+    const response2 = await API.getOauthToken({
       authCode: query.code,
       stateCode: query.state,
       verifierCode: codeVerifier,
       workflowId,
     });
     if (response2.expires_in && response2.refresh_expires_in) {
-      userName = decryptUsername(response2.access_token);
+      userName = API.Helpers.decryptUsername(response2.access_token);
 
       prevData.value.access_token = response2.access_token;
       prevData.value.refresh_token = response2.refresh_token;
@@ -252,198 +263,200 @@ async function HandleCallback(req, res) {
       prevData.value.deadline = getDeadlineMs(response2.expires_in);
       prevData.value.next_refresh = getDeadlineMs(response2.refresh_expires_in);
       prevData.value.userName = userName;
-
       dbSessions.update(prevData);
+    } else {
+      global.logger.error({
+        message: "No se pudo obtener el token",
+        label: global.getLabel(__dirname, __filename),
+      });
+      await callback(
+        requestCallback,
+        formTextResponse(
+          channels,
+          "Ocurrió un error inesperado. Por favor intente dentro de unos minutos."
+        ),
+        buildContext(requestContext || {})
+      );
+      return res.sendStatus(200);
     }
     // **************************************************
+    // * Close browser-tab and Continue request in child-process
+    // * It's not possible to pass Request or Response Nodejs-objects to child process. Google it.
     const llave_simetrica = getKeyEncripted();
-    const response3 = await singleSelectCustomerBasicData({
-      access_token: response2.access_token,
-      id_token: response2.id_token,
+    await callback(
+      requestCallback,
+      formTextResponse(channels, "Procesando información. Por favor espere ⏳"),
+      buildContext(requestContext || {})
+    );
+    // **************************************************
+    const backgroundSignIn = InBackground(`${__dirname}/background-SignIn.js`);
+
+    backgroundSignIn.send({
+      dataKey: workflowId,
+      prevData,
+      response2,
       llave_simetrica,
-      userName,
+      deviceFp: req.fingerprint.hash,
+      encriptedUserName: API.Helpers.encryptDataDiners(userName),
     });
-    if (response3 && response3.customer && response3.customer.isExpiredUser) {
-      if (prevData) {
-        dbSessions.remove(prevData);
-      }
-      const expiredUserText =
-        "Hubo un error con el usuario ingresado. Contacta al administrador";
-      return await callback(
-        requestCallback,
-        [
-          {
-            platforms: channels,
-            responseText: expiredUserText,
-          },
-        ],
-        buildContext({})
-      );
-    }
-    const name = response3.customer.firstName1 || "";
-    const lastname = response3.customer.lastName1 || "";
-    const fullnameOrUser = `${name} ${lastname}`.trim() || userName;
-    await callback(
-      requestCallback,
-      [
-        {
-          platforms: channels,
-          responseText: `Bienvenido(a) ${fullnameOrUser}`,
-        },
-      ],
-      buildContext({})
-    );
-    await callback(
-      requestCallback,
-      [
-        {
-          platforms: channels,
-          responseText: "Procesando solicitud, por favor espere.",
-        },
-      ],
-      buildContext({})
-    );
-    const customerId = response3.customer.customerId;
-    // **********************************************
-    const response4 = await verifyCustomerIpBlocked({
-      access_token: response2.access_token,
-      id_token: response2.id_token,
-      userName,
-    });
-    const executionTransactionStatus4 = getNestedProperty(
-      "dataExecutionTransaction.executionTransactionStatus",
-      response4
-    );
-    if (executionTransactionStatus4) {
-      if (`${executionTransactionStatus4.shortDesc}` === "1") {
-        if (prevData) {
-          dbSessions.remove(prevData);
+    // * DB is not available in child process. Send message to parent for DB-actions
+    backgroundSignIn.on("message", ({ entity, action, params }) => {
+      if (entity === "db") {
+        if (action === "update") {
+          let foundData = dbSessions.findOne({ key: params.dataKey });
+          if (foundData) {
+            foundData = { ...foundData, ...params.newData };
+            dbSessions.update(foundData);
+          } else {
+            global.logger.error({
+              message: "No se pudo actualizar la información de la sesión",
+              label: global.getLabel(__dirname, __filename),
+            });
+          }
         }
-        const blockedIpText =
-          "La dirección IP desde la que estás accediendo se encuentra bloqueada. Contacte al administrador.";
-        return await callback(
-          requestCallback,
-          [
-            {
-              platforms: channels,
-              responseText: blockedIpText,
-            },
-          ],
-          buildContext({})
-        );
+        if (action === "remove") {
+          const foundData = dbSessions.findOne({ key: params.dataKey });
+          if (foundData) {
+            dbSessions.remove(foundData);
+          } else {
+            global.logger.error({
+              message: "No se pudo eliminar la información de la sesión",
+              label: global.getLabel(__dirname, __filename),
+            });
+          }
+        }
       }
-    }
-    // *********************************************
-    const deviceFp = getNestedProperty("fingerprint.hash", req);
-    const response5 = await singleSelectTaskDevice({
-      access_token: response2.access_token,
-      id_token: response2.id_token,
-      customerId,
-      deviceFp,
     });
-    if (response5.device) {
-      global.logger.error({
-        message: getNestedProperty(
-          "dataExecutionTransaction.coreResultString",
-          response5
-        ),
-        label: global.getLabel(__dirname, __filename),
-      });
-      if (response5.device.active === true) {
-        // Call notifyPostLogin with 2
-      }
-    }
-    // *********************************************************
-    const response6 = await massiveSelectProductOptionsToOffer({
-      access_token: response2.access_token,
-      id_token: response2.id_token,
-      customerId,
-    });
-    let offersResponseText = "";
-    if (response6 && response6.collection) {
-      const resp = convertObjectPropertyToArray(
-        "collection.product",
-        response6
-      );
-      if (resp.collection.product.length) {
-        const firstLine = `Tienes ${resp.collection.product.length} oferta(s):`;
-        const secondLine = resp.collection.product
-          .map((prod, idx) => `  [${idx + 1}. ${prod.webTitle}] \n`)
-          .join(" ");
-        offersResponseText = `${firstLine}\n ${secondLine}`;
-      } else {
-        offersResponseText = "Por el momento no tienes ofertas de valor";
-      }
-    } else if (getNestedProperty("Detail.errors.error", response6)) {
-      offersResponseText =
-        "Ocurrió un error al obtener la información. Intente nuevamente dentro de unos minutos";
-    } else {
-      offersResponseText = "Ocurrió un error inesperado. Intente nuevamente.";
-    }
-    // const name = response3.customer.firstName1 || "";
-    // const lastname = response3.customer.lastName1 || "";
-    // const fullname = `${name} ${lastname}`.trim() || userName;
-    // await callback(
-    //   requestCallback,
-    //   [
-    //     {
-    //       platforms: channels,
-    //       responseText: `Bienvenido(a) ${fullname}`,
-    //     },
-    //   ],
-    //   buildContext({})
-    // );
-    await callback(
-      requestCallback,
-      [
-        {
-          platforms: channels,
-          responseText: offersResponseText,
-        },
-      ],
-      buildContext({})
-    );
-
-    return res
-      .status(200)
-      .send('<script type="text/javascript">window.close();</script>');
-
-    // -------------
-  } catch (error) {
+    // **************************************************
+    return res.status(200).send(getResponseScriptTag());
+  } catch (ex) {
     global.logger.error({
-      message: error,
+      message: ex && ex.message ? ex.message : ex,
       label: global.getLabel(__dirname, __filename),
     });
-
     if (!requestCallback) {
       global.logger.error({
-        message: "[4] No hay callback para responder",
+        message: "No hay callback para responder",
         label: global.getLabel(__dirname, __filename),
       });
-      return res
-        .status(200)
-        .send(
-          '<script type="text/javascript">alert("Ocurrio un error inesperado y se perdió la conexión");window.close();</script>'
-        );
+      return res.status(200).send(
+        getResponseScriptTag({
+          alertText: "Ocurrio un error inesperado y se perdió la conexión",
+        })
+      );
     }
     // Se puede responder
-    const lastContext = buildContext({});
+    const lastContext = buildContext(requestContext || {});
     await callback(
       requestCallback,
-      [
-        {
-          platforms: channels,
-          responseText:
-            "Ocurrió un error al procesar tu solicitud. Lamentamos el inconveniente",
-        },
-      ],
+      formTextResponse(
+        channels,
+        "Ocurrió un error al procesar tu solicitud. Lamentamos el inconveniente"
+      ),
       lastContext
     );
     return res
       .status(200)
-      .send(
-        '<script type="text/javascript">alert("Ocurrio un error");window.close();</script>'
+      .send('<script type="text/javascript">window.close();</script>');
+  }
+}
+
+/**
+ * processOtpRequest
+ * @param {Request} req
+ * @param {Response} res
+ * @returns {Promise} Promise
+ */
+async function HandleOtpConfirmation(req, res) {
+  let requestCallback = null;
+  let requestContext = null;
+  try {
+    const urlParts = url.parse(req.url, true);
+    const workflowReq = getFromContextData(req, "workflowId");
+    const workflowId = workflowReq || urlParts.query.workflowId;
+
+    const prevData = dbSessions.findOne({ key: workflowId });
+    if (!prevData || !prevData.value || !prevData.value.callback) {
+      global.logger.error({
+        message: "No hay información para responder",
+        label: global.getLabel(__dirname, __filename),
+      });
+      return res.sendStatus(200);
+    }
+    requestCallback = prevData.value.callback;
+    requestContext = prevData.value.initialContext;
+    // ******************************************
+    const userInput = JsonUtils.getNestedProperty("body.message.input.0", req);
+    const OtpCodeSkipVerify = "000000";
+    if (`${userInput}` !== OtpCodeSkipVerify) {
+      const response6 = await API.verifyOtp({
+        access_token: prevData.value.access_token,
+        id_token: prevData.value.id_token,
+        userName: prevData.value.userName,
+        userProfile: prevData.value.userProfile,
+        ruc: prevData.value.ruc,
+        userInput,
+      });
+      if (response6.otp && response6.otp.status) {
+        let callbackMessage = OtpVerificationMessages[response6.otp.status];
+        if (!callbackMessage) {
+          callbackMessage = OtpMissingCodeMessage;
+          await callback(
+            requestCallback,
+            formTextResponse(channels, callbackMessage),
+            buildContext(requestContext || {})
+          );
+          return res.sendStatus(200);
+        }
+        await callback(
+          requestCallback,
+          formTextResponse(channels, callbackMessage),
+          buildContext(requestContext || {})
+        );
+      }
+    } else {
+      await callback(
+        requestCallback,
+        formTextResponse(channels, "Código verificado ✅"),
+        buildContext(requestContext || {})
       );
+    }
+    // ******************************************
+    const pendingOperation = prevData.value.pendingPath;
+    if (!pendingOperation) {
+      return res.sendStatus(200);
+    }
+    prevData.value.pendingPath = null;
+    delete req.body.context.data.pending_path;
+    dbSessions.update(prevData);
+    // 308 -> Same method (GET, POST) and permanent redirection
+    return res.redirect(
+      `${process.env.URL}${pendingOperation}?workflowId=${workflowId}`
+    );
+    // ---
+  } catch (ex) {
+    global.logger.error({
+      message: ex && ex.message ? ex.message : ex,
+      label: global.getLabel(__dirname, __filename),
+    });
+    if (!requestCallback) {
+      global.logger.error({
+        message: "No hay callback para responder",
+        label: global.getLabel(__dirname, __filename),
+      });
+      return res.sendStatus(200);
+    }
+    // Se puede responder
+    const lastContext = buildContext(requestContext || {});
+    await callback(
+      requestCallback,
+      formTextResponse(
+        channels,
+        "Ocurrió un error al procesar tu solicitud. Lamentamos el inconveniente"
+      ),
+      lastContext
+    );
+    return res.sendStatus(200);
   }
 }
 
@@ -451,4 +464,5 @@ module.exports = {
   buildSignInLink,
   HandleEntrypoint,
   HandleCallback,
+  HandleOtpConfirmation,
 };

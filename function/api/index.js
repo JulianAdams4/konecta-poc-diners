@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 /* eslint-disable dot-notation */
 /* eslint-disable camelcase */
 /* eslint-disable import/no-unresolved */
@@ -8,6 +9,19 @@ const querystring = require("querystring");
 
 const { encryptDataDiners } = require("../controllers/_helpers");
 const { oauthServer } = require("../utils/constants");
+
+const log = (type, service, dataOrError, options) => {
+  const _type = type === "R" ? "resolve" : "reject";
+  const _options = JSON.stringify(options);
+  const _result = JSON.stringify(type === "R" ? dataOrError.data : dataOrError);
+  console.log(
+    [
+      `${service} [${_type}]`,
+      `   Result:   ${_result}`,
+      `   Options:  ${_options}\n`,
+    ].join("\n")
+  );
+};
 
 async function directorDateTime() {
   return new Promise((resolve, reject) => {
@@ -33,8 +47,8 @@ async function singleSelectPublicKey() {
   return new Promise((resolve, reject) => {
     const options = {
       method: "POST",
-      url: "https://director.dce.ec/desarrollo/directcall/singleSelectPublicKey",
-      // url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/singleSelectPublicKey`,
+      // url: "https://director.dce.ec/desarrollo/directcall/singleSelectPublicKey",
+      url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/singleSelectPublicKey`,
       headers: {
         "content-type": "application/json",
         accept: "application/json",
@@ -47,21 +61,11 @@ async function singleSelectPublicKey() {
     };
     axios(options)
       .then((response) => {
-        console.log(
-          "singleSelectPublicKey (resolve): ",
-          JSON.stringify(response.data),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("R", "singleSelectPublicKey", response, options);
         resolve(response.data);
       })
       .catch((error) => {
-        console.log(
-          "singleSelectPublicKey (reject): ",
-          JSON.stringify(error),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("D", "singleSelectPublicKey", error, options);
         reject(error);
       });
   });
@@ -124,21 +128,11 @@ async function getOauthToken({
     };
     axios(options)
       .then((response) => {
-        console.log(
-          "getOauthToken (resolve): ",
-          JSON.stringify(response.data),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("R", "getOauthToken", response, options);
         resolve(response.data);
       })
       .catch((error) => {
-        console.log(
-          "getOauthToken (reject): ",
-          JSON.stringify(error),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("D", "getOauthToken", error, options);
         reject(error);
       });
   });
@@ -167,14 +161,14 @@ async function singleSelectCustomerBasicData({
   access_token,
   id_token,
   llave_simetrica,
-  userName,
+  encriptedUserName,
 }) {
   return new Promise((resolve, reject) => {
     const data = {
       customer: {
         "@name": "customer",
         systemUser: {
-          userName: encryptDataDiners(userName),
+          userName: encriptedUserName,
         },
       },
     };
@@ -197,21 +191,11 @@ async function singleSelectCustomerBasicData({
     };
     axios(options)
       .then((response) => {
-        console.log(
-          "singleSelectCustomerBasicData (resolve): ",
-          JSON.stringify(response.data),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("R", "singleSelectCustomerBasicData", response, options);
         resolve(response.data);
       })
       .catch((error) => {
-        console.log(
-          "singleSelectCustomerBasicData (reject): ",
-          JSON.stringify(error),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("D", "singleSelectCustomerBasicData", error, options);
         reject(error);
       });
   });
@@ -267,21 +251,11 @@ async function verifyCustomerIpBlocked({ access_token, id_token, userName }) {
 
     axios(options)
       .then((response) => {
-        console.log(
-          "verifyCustomerIpBlocked (resolve): ",
-          JSON.stringify(response.data),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("R", "verifyCustomerIpBlocked", response, options);
         resolve(response.data);
       })
       .catch((error) => {
-        console.log(
-          "verifyCustomerIpBlocked (reject): ",
-          JSON.stringify(error),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("D", "verifyCustomerIpBlocked", error, options);
         reject(error);
       });
   });
@@ -332,25 +306,168 @@ async function singleSelectTaskDevice({
     };
     axios(options)
       .then((response) => {
-        console.log(
-          "singleSelectTaskDevice (resolve): ",
-          JSON.stringify(response.data),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("R", "singleSelectTaskDevice", response, options);
         resolve(response.data);
       })
       .catch((error) => {
-        console.log(
-          "singleSelectTaskDevice (reject): ",
-          JSON.stringify(error),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("D", "singleSelectTaskDevice", error, options);
         reject(error);
       });
   });
 }
+
+// .....
+
+/**
+ * (DIRECTOR_CORE_TARJETAS_URL) singleSelectTaskDevice
+ * @param {*} params
+ * @returns - { dataExecutionTransaction: { coreReferenceNumber, coreResultString }, device: { active } }
+ */
+function removeTypeFromCustomerId(customerId) {
+  if (customerId && customerId.includes("#")) {
+    const customerIdParts = `${customerId}`.split("#");
+    if (customerIdParts.length < 2) {
+      return customerIdParts[0];
+    }
+    return customerIdParts[1];
+  }
+  return customerId;
+}
+
+async function processOtpRequest({
+  access_token,
+  customerId,
+  id_token,
+  ruc,
+  userName,
+  userProfile,
+}) {
+  return new Promise((resolve, reject) => {
+    const data = {
+      customer: {
+        "@dataModel": "diners.financials",
+        "@name": "customer",
+        "@version": "1.0",
+        originCustomer: { shortDesc: "PBN" },
+        systemUser: { userName },
+        customerId: removeTypeFromCustomerId(customerId),
+      },
+      profile: {
+        "@dataModel": "diners.financials",
+        "@name": "profile",
+        "@version": "1.0",
+        profileType: { mnemonic: userProfile },
+      },
+      establishment: {
+        "@dataModel": "diners.financials",
+        "@name": "establishment",
+        "@version": "1.0",
+        ruc,
+      },
+      otp: {
+        "@dataModel": "diners.financials",
+        "@name": "otp",
+        "@version": "1.0",
+        otp: "",
+        profilingTransaction: "ADD",
+      },
+    };
+    const options = {
+      method: "POST",
+      url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/processOtpRequest`,
+      headers: {
+        "accept-language": "es-419,es;q=0.9",
+        "content-type": "application/json",
+        accept: "application/json",
+        access_token,
+        channel: "IN",
+        feature_id: "ROL@5500",
+        func_type: "ADD",
+        id_token,
+        timestampcanal: new Date().toString(),
+      },
+      data,
+    };
+    axios(options)
+      .then((response) => {
+        log("R", "processOtpRequest", response, options);
+        resolve(response.data);
+      })
+      .catch((error) => {
+        log("D", "processOtpRequest", error, options);
+        reject(error);
+      });
+  });
+}
+
+async function verifyOtp({
+  access_token,
+  customerId,
+  id_token,
+  ruc,
+  userInput,
+  userName,
+  userProfile,
+}) {
+  return new Promise((resolve, reject) => {
+    const data = {
+      customer: {
+        "@dataModel": "diners.financials",
+        "@name": "customer",
+        "@version": "1.0",
+        originCustomer: { shortDesc: "PIN" },
+        systemUser: { userName },
+        customerId: removeTypeFromCustomerId(customerId),
+      },
+      profile: {
+        "@dataModel": "diners.financials",
+        "@name": "profile",
+        "@version": "1.0",
+        profileType: { mnemonic: userProfile },
+      },
+      establishment: {
+        "@dataModel": "diners.financials",
+        "@name": "establishment",
+        "@version": "1.0",
+        ruc,
+      },
+      otp: {
+        "@dataModel": "diners.financials",
+        "@name": "otp",
+        "@version": "1.0",
+        otp: userInput,
+        profilingTransaction: "ADD",
+      },
+    };
+    const options = {
+      method: "POST",
+      url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/verifyOtp`,
+      headers: {
+        "accept-language": "es-419,es;q=0.9",
+        "content-type": "application/json",
+        accept: "application/json",
+        access_token,
+        channel: "IN",
+        feature_id: "ROL@5500",
+        func_type: "ADD",
+        id_token,
+        timestampcanal: new Date().toString(),
+      },
+      data,
+    };
+    axios(options)
+      .then((response) => {
+        log("R", "verifyOtp", response, options);
+        resolve(response.data);
+      })
+      .catch((error) => {
+        log("D", "verifyOtp", error, options);
+        reject(error);
+      });
+  });
+}
+
+// .....
 
 async function massiveSelectProductOptionsToOffer({
   access_token,
@@ -384,30 +501,21 @@ async function massiveSelectProductOptionsToOffer({
     };
     axios(options)
       .then((response) => {
-        console.log(
-          "massiveSelectProductOptionsToOffer (resolve): ",
-          JSON.stringify(response.data),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("R", "massiveSelectProductOptionsToOffer", response, options);
         resolve(response.data);
       })
       .catch((error) => {
-        console.log(
-          "massiveSelectProductOptionsToOffer (reject): ",
-          JSON.stringify(error),
-          JSON.stringify(options),
-          "\n"
-        );
+        log("D", "massiveSelectProductOptionsToOffer", error, options);
         reject(error);
       });
   });
 }
 
 module.exports = {
-  // getUsername,
-  // getPassword,
-  decryptUsername,
+  Helpers: {
+    decryptUsername,
+    encryptDataDiners,
+  },
 
   directorDateTime,
   singleSelectPublicKey,
@@ -415,6 +523,9 @@ module.exports = {
   singleSelectCustomerBasicData,
   verifyCustomerIpBlocked,
   singleSelectTaskDevice,
+
+  processOtpRequest,
+  verifyOtp,
 
   massiveSelectProductOptionsToOffer,
 };

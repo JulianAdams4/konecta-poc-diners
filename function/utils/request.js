@@ -40,4 +40,19 @@ function getFromContextData(req, key) {
   return getNestedProperty(path, req);
 }
 
-module.exports = { parseReqParams, saveInContextData, getFromContextData };
+function getResponseScriptTag(params) {
+  const { alertText, withClose = true } = params || {};
+  let tagContent = "";
+  if (alertText) tagContent = `alert("${alertText}");`;
+  if (withClose) tagContent = `${tagContent}window.close();`;
+  return `<script type="text/javascript">${tagContent}</script>`;
+}
+
+// function getScriptTagPostRequest({ url }) {}
+
+module.exports = {
+  parseReqParams,
+  saveInContextData,
+  getFromContextData,
+  getResponseScriptTag,
+};

@@ -14,6 +14,8 @@ const oauthServer = {
   oauth_server_url: process.env.OAUTH_SERVER_URL,
   scope_private: process.env.SCOPE_PRIVATE,
 
+  redirect_callback_timeout_seg: 60 * 5 * 1000, // ms
+
   attempts: 3, // For refreshing session
   timeout: 10000, // ms
 
@@ -67,18 +69,33 @@ const contextKeys = {
 
 const texts = {
   signinExplanationText:
-    "Parece que no tienes una sesión activa. Por favor, inicia sesión para continuar",
+    "Parece que no tienes una sesión activa ⚠️\nPor favor, inicia sesión para continuar 🛡",
   changedSessionExplanationText:
-    "Parece que tu sesión ha llegado a su fin. Por favor, inicia sesión para continuar",
+    "Parece que tu sesión ha llegado a su fin ⌛️\nPor favor, inicia sesión para continuar 🛡",
   signinButtonText: "Iniciar sesión",
 };
 
+const oauthPatterns = ["get-initialize?", "get-callback?"];
+
 const publicPatters = ["metrics", "ping", "get-", "favicon"];
+
+const OtpVerificationMessages = {
+  0: "Codígo verificado ✅",
+  1: "El código ingresado ha expirado ⌛️\nIntente de nuevo.",
+  2: "El código ingresado no es correcto ❌",
+  3: "Usuario bloqueado ⛔️",
+  4: "Ocurrió un error al verificar el código ingresado ❗️",
+};
+const OtpMissingCodeMessage =
+  "Ocurrió un error al verificar el código ingresado ❌";
 
 module.exports = {
   texts,
   oauthServer,
   contextKeys,
+  oauthPatterns,
   publicPatters,
   channels: ["all"],
+  OtpMissingCodeMessage,
+  OtpVerificationMessages,
 };

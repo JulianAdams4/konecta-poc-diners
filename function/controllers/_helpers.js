@@ -11,6 +11,7 @@ const JSEncrypt = require("node-jsencrypt");
 const { contextKeys } = require("../utils/constants");
 const { getNestedProperty } = require("../utils/json");
 const { saveInContextData } = require("../utils/request");
+// eslint-disable-next-line no-unused-vars
 const getRandomValues = require("../utils/random");
 
 function buildContext(context) {
@@ -65,7 +66,9 @@ function getSecureRandomNumber() {
   // const cryptoA = window.crypto || window.msCrypto;
   // if (!cryptoA) return null;
   const array = new Uint32Array(1);
-  getRandomValues(array);
+  crypto.getRandomValues(array);
+  // let array = new Uint32Array(1);
+  // getRandomValues(array);
   return `0.${array[0].toString()}`;
 }
 
