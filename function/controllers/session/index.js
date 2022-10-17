@@ -26,13 +26,14 @@ const {
   buildContext,
   getDeadlineMs,
   getKeyEncripted,
-  getStateCode,
-  getVerifierCode,
+  // getStateCode,
+  // getVerifierCode,
   setPublicKey,
 } = require("../_helpers");
 
-const dbSessions = require("../../utils/database"); // ("sessions.db");
-// const dbSessions = db.collection;
+const { getStateCode2, getVerifierCode2 } = require("../../utils/random");
+
+const dbSessions = require("../../utils/database");
 
 /**
  * Response con link para iniciar sesión
@@ -109,8 +110,8 @@ async function HandleEntrypoint(req, res) {
     requestCallback = prevData.value.callback;
     requestContext = prevData.value.initialContext;
 
-    const stateCode = getStateCode();
-    const codeVerifier = getVerifierCode();
+    const stateCode = getStateCode2();
+    const codeVerifier = getVerifierCode2();
     const hash = await crypto
       .createHash("sha256")
       .update(codeVerifier)
