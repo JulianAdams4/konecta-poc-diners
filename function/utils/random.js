@@ -19,4 +19,33 @@ function getRandomValues(buf) {
   throw new Error("No secure random number generator available.");
 }
 
-module.exports = getRandomValues;
+const charSet =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+function getSecureRandomNumber() {
+  const array = new Uint8Array(1);
+  getRandomValues(array);
+  return `0.${array[0].toString()}`;
+}
+
+function getCodeByBits(bits) {
+  return Array.apply(0, Array(bits))
+    .map(function () {
+      return (function (charset) {
+        return charset.charAt(
+          Math.floor(getSecureRandomNumber() * charset.length)
+        );
+      })(charSet);
+    })
+    .join("");
+}
+
+function getStateCode2() {
+  return getCodeByBits(32);
+}
+
+function getVerifierCode2() {
+  return getCodeByBits(128);
+}
+
+module.exports = { getStateCode2, getVerifierCode2 };

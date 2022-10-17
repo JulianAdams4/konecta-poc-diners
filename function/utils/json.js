@@ -85,10 +85,21 @@ function getFunctionName() {
   return new Error().stack.match(/at (\S+)/g)[1].slice(3);
 }
 
+function maskAccountNumber(accountNumber) {
+  const accNumStr = `${accountNumber}`.trim();
+  const unmaskedLength = 4;
+  const maskedLength =
+    accNumStr.length > 4 ? accNumStr.length - unmaskedLength : 0;
+  const maskedAccountNumber =
+    "X".repeat(maskedLength) + accNumStr.slice(accNumStr.length - 4);
+  return maskedAccountNumber;
+}
+
 module.exports = {
   convertObjectPropertyToArray,
   getCircularReplacer,
   getNestedProperty,
   updateNested,
   getFunctionName,
+  maskAccountNumber,
 };

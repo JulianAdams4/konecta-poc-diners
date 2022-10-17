@@ -10,9 +10,6 @@ const JSEncrypt = require("node-jsencrypt");
 
 const { contextKeys } = require("../utils/constants");
 const { getNestedProperty } = require("../utils/json");
-const { saveInContextData } = require("../utils/request");
-// eslint-disable-next-line no-unused-vars
-const getRandomValues = require("../utils/random");
 
 function buildContext(context) {
   const newContext = JSON.parse(JSON.stringify(context));
@@ -63,12 +60,8 @@ const charSet =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 function getSecureRandomNumber() {
-  // const cryptoA = window.crypto || window.msCrypto;
-  // if (!cryptoA) return null;
   const array = new Uint32Array(1);
   crypto.getRandomValues(array);
-  // let array = new Uint32Array(1);
-  // getRandomValues(array);
   return `0.${array[0].toString()}`;
 }
 
@@ -106,29 +99,6 @@ function getDeadlineMs(expiration) {
   // eslint-disable-next-line radix
   const expirationMs = parseInt(`${expiration}`) * 1000;
   return Date.now() + expirationMs;
-}
-
-function saveOauthTokenResponse(req, response) {
-  if (response.expires_in && response.refresh_expires_in) {
-    saveInContextData(req, contextKeys.access_token, response.access_token);
-    // saveInContextData(req, contextKeys.expires_in, response.expires_in);
-    // saveInContextData(
-    //   req,
-    //   contextKeys.refresh_expires_in,
-    //   response.refresh_expires_in
-    // );
-    saveInContextData(req, contextKeys.refresh_token, response.refresh_token);
-    saveInContextData(req, contextKeys.token_type, response.token_type);
-    saveInContextData(req, contextKeys.id_token, response.id_token);
-    saveInContextData(req, contextKeys.session_state, response.session_state);
-    saveInContextData(req, contextKeys.scope, response.scope);
-
-    const sessionDeadline = getDeadlineMs(response.expires_in);
-    saveInContextData(req, contextKeys._deadline, sessionDeadline);
-
-    const refreshDeadline = getDeadlineMs(response.refresh_expires_in);
-    saveInContextData(req, contextKeys._next_refresh, refreshDeadline);
-  }
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -221,7 +191,6 @@ module.exports = {
   generateCodeChallenge,
   getDeadlineMs,
   // ..
-  saveOauthTokenResponse,
   getKey,
   setPublicKey,
   encryptTextDiners,

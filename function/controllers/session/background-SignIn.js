@@ -1,19 +1,11 @@
-/* eslint-disable no-unused-vars */
 /* eslint-disable prefer-destructuring */
 /* eslint-disable camelcase */
-const base64url = require("base64url");
-const crypto = require("crypto");
-const nanoid = require("nanoid");
-const url = require("url");
 
 const API = require("../../api");
 const { callback, formTextResponse } = require("../konecta");
 const { channels } = require("../../utils/constants");
 const JsonUtils = require("../../utils/json");
 const { buildContext } = require("../_helpers");
-
-// const db = require("../../utils/database")("sessions.db");
-// const dbSessions = db.collection;
 
 process.on("message", async (props) => {
   const {
@@ -108,17 +100,10 @@ process.on("message", async (props) => {
   const fullname = `${name} ${lastname}`.trim();
   await callback(
     requestCallback,
-    formTextResponse(channels, `Bienvenido(a) ${fullname || userName} 👋`),
+    formTextResponse(channels, `Bienvenido(a)\n${fullname || userName} 👋`),
     buildContext(requestContext || {})
   );
 
-  // prevData.value.firstName1 = name;
-  // prevData.value.lastName1 = lastname;
-  // prevData.value.fullname = fullname;
-  // prevData.value.customerId = response3.customer.customerId;
-  // prevData.value.userProfile = response3.customer.userProfile;
-  // prevData.value.ruc = response3.customer.identification.idNumber;
-  // dbSessions.update(prevData);
   process.send({
     action: "update",
     entity: "db",
@@ -134,15 +119,6 @@ process.on("message", async (props) => {
       },
     },
   });
-  // dbSessions.remove(prevData);
-  await callback(
-    requestCallback,
-    formTextResponse(
-      channels,
-      "Procesando solicitud. Por favor espere unos momentos ⏳"
-    ),
-    buildContext(requestContext || {})
-  );
   // *************************************
   const id_token = prevData.value.id_token;
   const access_token = prevData.value.access_token;

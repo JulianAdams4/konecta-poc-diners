@@ -10,8 +10,6 @@ const bodyParser = require('body-parser');
 const morgan = require('morgan');
 const Fingerprint = require('express-fingerprint');
 
-require('module-alias/register');
-
 const handler = require('./function/handler');
 const logger = require('./winston/logger');
 
@@ -91,9 +89,9 @@ app.use(
 );
 
 const port = process.env.http_port || 3000;
-app.listen(port, () => {
+app.listen(port, '127.0.0.1', () => {
   global.logger.info({
-    message: `Listening on port: ${port}`,
+    message: `Server running at http://127.0.0.1:${port}/`,
     label: global.getLabel(__dirname, __filename),
   });
 });

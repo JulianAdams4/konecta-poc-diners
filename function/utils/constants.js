@@ -33,18 +33,6 @@ const oauthServer = {
     accountDisabled: 1,
     success: 2,
   },
-  // messages() {
-  //   return [
-  //     {
-  //       key: this.typeResponseError.invalidCredentials,
-  //       value: 'BD_LOGIN_ERROR_01',
-  //     },
-  //     {
-  //       key: this.typeResponseError.accountDisabled,
-  //       value: 'BD_LOGIN_ERROR_02',
-  //     },
-  //   ];
-  // },
 };
 
 const contextKeys = {
@@ -67,12 +55,15 @@ const contextKeys = {
   token_type: "_dc_token_type",
 };
 
+// eslint-disable-next-line camelcase
+const default_timeout = 5 * 60 * 1000;
+
 const texts = {
   signinExplanationText:
-    "Parece que no tienes una sesión activa ⚠️\nPor favor, inicia sesión para continuar 🛡",
+    "Por favor, haz clic en el enlace y accede a tu cuenta",
   changedSessionExplanationText:
-    "Parece que tu sesión ha llegado a su fin ⌛️\nPor favor, inicia sesión para continuar 🛡",
-  signinButtonText: "Iniciar sesión",
+    "Parece que tu sesión ha llegado a su fin ⌛️\nPor favor, accede a tu cuenta nuevamente para continuar 🛡",
+  signinButtonText: "Acceder",
 };
 
 const oauthPatterns = ["get-initialize?", "get-callback?"];
@@ -86,8 +77,6 @@ const OtpVerificationMessages = {
   3: "Usuario bloqueado ⛔️",
   4: "Ocurrió un error al verificar el código ingresado ❗️",
 };
-const OtpMissingCodeMessage =
-  "Ocurrió un error al verificar el código ingresado ❌";
 
 module.exports = {
   texts,
@@ -95,7 +84,7 @@ module.exports = {
   contextKeys,
   oauthPatterns,
   publicPatters,
+  default_timeout,
   channels: ["all"],
-  OtpMissingCodeMessage,
   OtpVerificationMessages,
 };

@@ -35,8 +35,13 @@ function saveInContextData(req, key, value) {
  * @param {*} separator
  * @returns {*} value or undefined
  */
-function getFromContextData(req, key) {
-  const path = `body.context.data.${key}.0`;
+function getFromContextData(req, key, skipFirstIndex = false) {
+  const path = `body.context.data.${key}${skipFirstIndex ? "" : ".0"}`;
+  return getNestedProperty(path, req);
+}
+
+function getUserInputFromContext(req, skipFirstIndex = false) {
+  const path = `body.message.input${skipFirstIndex ? "" : ".0"}`;
   return getNestedProperty(path, req);
 }
 
@@ -48,11 +53,10 @@ function getResponseScriptTag(params) {
   return `<script type="text/javascript">${tagContent}</script>`;
 }
 
-// function getScriptTagPostRequest({ url }) {}
-
 module.exports = {
   parseReqParams,
   saveInContextData,
   getFromContextData,
   getResponseScriptTag,
+  getUserInputFromContext,
 };

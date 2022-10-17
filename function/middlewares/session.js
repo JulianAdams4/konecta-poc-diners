@@ -7,6 +7,9 @@ const {
   hasNoSession,
   hasChangedState,
   hasExpiredSession,
+  getDefaultTimeout,
+  logPublicRoute,
+  logProtectedRoute,
 } = require("./_helpers");
 
 router.use("*", (req, res, next) => {
@@ -15,21 +18,14 @@ router.use("*", (req, res, next) => {
       // * Increase timeout only for OAuth routes
       res.setTimeout(getOauthTimeout());
     }
-    console.warn("[isPublicRoute]: ", req.originalUrl);
-    console.warn("   BodyCallback: ", JSON.stringify(req.body.callback || {}));
-    console.warn("   BodyContext:  ", JSON.stringify(req.body.context || {}));
-    console.warn("");
+    logPublicRoute(req);
     return next();
   }
 
-  console.log("[Intern Route] - ", req.originalUrl);
-  console.log("   BodyCallback: ", JSON.stringify(req.body.callback || {}));
-  console.log("   BodyContext:  ", JSON.stringify(req.body.context || {}));
-  console.log("");
+  logProtectedRoute(req);
 
   if (hasNoSession(req)) {
     res.sendStatus(200);
-    // No tiene sesion. Mandar al signin
     return SessionController.buildSignInLink({
       body: req.body,
       pendingPath: req.originalUrl,
@@ -38,7 +34,6 @@ router.use("*", (req, res, next) => {
 
   if (hasChangedState(req)) {
     res.sendStatus(200);
-    // Anular la sesion y mandar al signin
     return SessionController.buildSignInLink({
       body: req.body,
       pendingPath: req.originalUrl,
@@ -48,7 +43,6 @@ router.use("*", (req, res, next) => {
 
   if (hasExpiredSession(req)) {
     res.sendStatus(200);
-    // Eliminar rastros de la sesion y mandar al signin
     return SessionController.buildSignInLink({
       body: req.body,
       pendingPath: req.originalUrl,
@@ -56,7 +50,8 @@ router.use("*", (req, res, next) => {
     });
   }
 
-  res.setTimeout(getOauthTimeout());
+  // * Increase timeout for non-production environments
+  res.setTimeout(getDefaultTimeout());
   return next();
 });
 

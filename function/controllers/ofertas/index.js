@@ -9,10 +9,7 @@ const { getFromContextData } = require("../../utils/request");
 const { callback, formTextResponse } = require("../konecta");
 const { buildContext } = require("../_helpers");
 const API = require("../../api");
-
-const db = require("../../utils/database")("sessions.db");
-
-const dbSessions = db.collection;
+const dbSessions = require("../../utils/database");
 
 async function HandleMassiveSelectProductOptionsToOffer(req, res) {
   let requestContext = null;
@@ -33,9 +30,9 @@ async function HandleMassiveSelectProductOptionsToOffer(req, res) {
     }
     requestCallback = prevData.value.callback;
     requestContext = prevData.value.initialContext;
-
+    // *************************************
     res.sendStatus(200); // send 200 OK as soon as possible.
-
+    // *************************************
     await callback(
       requestCallback,
       formTextResponse(
@@ -55,6 +52,11 @@ async function HandleMassiveSelectProductOptionsToOffer(req, res) {
       customerId,
     });
     let offersResponseText = "";
+    const type = {
+      LOA: "Crédito",
+      CUE: "Cuenta nueva",
+      ANF: "Anticipo",
+    };
     if (response6 && response6.collection) {
       const resp = JsonUtils.convertObjectPropertyToArray(
         "collection.product",
@@ -64,7 +66,12 @@ async function HandleMassiveSelectProductOptionsToOffer(req, res) {
         offersResponseText = [
           `Tienes ${resp.collection.product.length} oferta(s):`,
           resp.collection.product
-            .map((prod, idx) => `${idx + 1}.- ${prod.webTitle}`)
+            .map(
+              (prod, idx) =>
+                `${idx + 1}.- Tipo: ${
+                  type[prod.applicationCode]
+                }. Monto aprobado: $${parseFloat(prod.amountApproved)}`
+            )
             .join("\n"),
         ].join("\n\n");
       } else {
@@ -81,7 +88,7 @@ async function HandleMassiveSelectProductOptionsToOffer(req, res) {
     return await callback(
       requestCallback,
       formTextResponse(channels, offersResponseText),
-      buildContext({})
+      buildContext(requestContext || {})
     );
   } catch (ex) {
     global.logger.error({
@@ -96,14 +103,13 @@ async function HandleMassiveSelectProductOptionsToOffer(req, res) {
       return res.sendStatus(200);
     }
     // Se puede responder
-    const lastContext = buildContext(requestContext || {});
     await callback(
       requestCallback,
       formTextResponse(
         channels,
         "Ocurrió un error al procesar tu solicitud. Lamentamos el inconveniente"
       ),
-      lastContext
+      buildContext(requestContext || {})
     );
     return res.sendStatus(200);
   }

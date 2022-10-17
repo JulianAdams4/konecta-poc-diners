@@ -1,5 +1,5 @@
-/* eslint-disable import/no-unresolved */
 const SessionController = require("./session");
-const TarjetasController = require("./tarjetas");
+const OfertasController = require("./ofertas");
+const TransfersController = require("./transferencias");
 
-module.exports = { SessionController, TarjetasController };
+module.exports = { SessionController, OfertasController, TransfersController };

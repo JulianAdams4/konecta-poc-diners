@@ -14,7 +14,6 @@ const { callback, formLinkResponse, formTextResponse } = require("../konecta");
 const {
   channels,
   oauthServer,
-  OtpMissingCodeMessage,
   OtpVerificationMessages,
   texts,
 } = require("../../utils/constants");
@@ -32,9 +31,8 @@ const {
   setPublicKey,
 } = require("../_helpers");
 
-const db = require("../../utils/database")("sessions.db");
-
-const dbSessions = db.collection;
+const dbSessions = require("../../utils/database"); // ("sessions.db");
+// const dbSessions = db.collection;
 
 /**
  * Response con link para iniciar sesión
@@ -49,7 +47,7 @@ function buildSignInLink({ body, pendingPath, dropSession }) {
     JsonUtils.updateNested(context, ["data"], (prevData) => ({
       ...prevData,
       workflowId: [workflowId],
-      pending_path: [pendingPath],
+      // pending_path: [pendingPath],
     }));
     // ****************
     dbSessions.insert({
@@ -106,7 +104,7 @@ async function HandleEntrypoint(req, res) {
         message: "No hay información para responder",
         label: global.getLabel(__dirname, __filename),
       });
-      return res.sendStatus(200);
+      return res.status(200).send(getResponseScriptTag());
     }
     requestCallback = prevData.value.callback;
     requestContext = prevData.value.initialContext;
@@ -152,7 +150,7 @@ async function HandleEntrypoint(req, res) {
         message: "No hay callback para responder",
         label: global.getLabel(__dirname, __filename),
       });
-      return res.sendStatus(200);
+      return res.status(200).send(getResponseScriptTag());
     }
     // Se puede responder
     const lastContext = buildContext(requestContext || {});
@@ -164,7 +162,7 @@ async function HandleEntrypoint(req, res) {
       ),
       lastContext
     );
-    return res.sendStatus(200);
+    return res.status(200).send(getResponseScriptTag());
   }
 }
 
@@ -206,7 +204,7 @@ async function HandleCallback(req, res) {
         message: "No hay información para responder",
         label: global.getLabel(__dirname, __filename),
       });
-      return res.sendStatus(200);
+      return res.status(200).send(getResponseScriptTag());
     }
     requestCallback = prevData.value.callback;
     requestContext = prevData.value.initialContext;
@@ -238,7 +236,7 @@ async function HandleCallback(req, res) {
         ),
         buildContext(requestContext || {})
       );
-      return res.sendStatus(200);
+      return res.status(200).send(getResponseScriptTag());
     }
     // ********************************************
     let userName = "";
@@ -277,20 +275,18 @@ async function HandleCallback(req, res) {
         ),
         buildContext(requestContext || {})
       );
-      return res.sendStatus(200);
+      return res.status(200).send(getResponseScriptTag());
     }
     // **************************************************
     // * Close browser-tab and Continue request in child-process
-    // * It's not possible to pass Request or Response Nodejs-objects to child process. Google it.
     const llave_simetrica = getKeyEncripted();
     await callback(
       requestCallback,
       formTextResponse(channels, "Procesando información. Por favor espere ⏳"),
       buildContext(requestContext || {})
     );
-    // **************************************************
+    // * It's not possible to pass Request or Response Circular-Nodejs-objects to child process. Google it.
     const backgroundSignIn = InBackground(`${__dirname}/background-SignIn.js`);
-
     backgroundSignIn.send({
       dataKey: workflowId,
       prevData,
@@ -303,9 +299,9 @@ async function HandleCallback(req, res) {
     backgroundSignIn.on("message", ({ entity, action, params }) => {
       if (entity === "db") {
         if (action === "update") {
-          let foundData = dbSessions.findOne({ key: params.dataKey });
+          const foundData = dbSessions.findOne({ key: params.dataKey });
           if (foundData) {
-            foundData = { ...foundData, ...params.newData };
+            foundData.value = { ...foundData.value, ...params.newData };
             dbSessions.update(foundData);
           } else {
             global.logger.error({
@@ -339,11 +335,7 @@ async function HandleCallback(req, res) {
         message: "No hay callback para responder",
         label: global.getLabel(__dirname, __filename),
       });
-      return res.status(200).send(
-        getResponseScriptTag({
-          alertText: "Ocurrio un error inesperado y se perdió la conexión",
-        })
-      );
+      return res.status(200).send(getResponseScriptTag());
     }
     // Se puede responder
     const lastContext = buildContext(requestContext || {});
@@ -355,9 +347,7 @@ async function HandleCallback(req, res) {
       ),
       lastContext
     );
-    return res
-      .status(200)
-      .send('<script type="text/javascript">window.close();</script>');
+    return res.status(200).send(getResponseScriptTag());
   }
 }
 
@@ -397,22 +387,33 @@ async function HandleOtpConfirmation(req, res) {
         ruc: prevData.value.ruc,
         userInput,
       });
-      if (response6.otp && response6.otp.status) {
-        let callbackMessage = OtpVerificationMessages[response6.otp.status];
-        if (!callbackMessage) {
-          callbackMessage = OtpMissingCodeMessage;
-          await callback(
-            requestCallback,
-            formTextResponse(channels, callbackMessage),
-            buildContext(requestContext || {})
-          );
-          return res.sendStatus(200);
-        }
+      // On weird or missing OTP status, abort
+      if (
+        [null, undefined].includes(response6.otp.status) ||
+        !OtpVerificationMessages[response6.otp.status]
+      ) {
         await callback(
           requestCallback,
-          formTextResponse(channels, callbackMessage),
+          formTextResponse(
+            channels,
+            [
+              "Ocurrió un error al verificar el código ingresado ❌",
+              "Intente más tarde.",
+            ].join("\n")
+          ),
           buildContext(requestContext || {})
         );
+        return res.sendStatus(200);
+      }
+      // Handled OTP status
+      const callbackMessage = OtpVerificationMessages[response6.otp.status];
+      await callback(
+        requestCallback,
+        formTextResponse(channels, callbackMessage),
+        buildContext(requestContext || {})
+      );
+      if (`${response6.otp.status}`.trim() !== "0") {
+        return res.sendStatus(200);
       }
     } else {
       await callback(
@@ -427,13 +428,18 @@ async function HandleOtpConfirmation(req, res) {
       return res.sendStatus(200);
     }
     prevData.value.pendingPath = null;
-    delete req.body.context.data.pending_path;
+    prevData.value.initialContext = {
+      ...requestContext,
+      data: {
+        ...requestContext.data,
+        hasSession: ["True"],
+      },
+    };
     dbSessions.update(prevData);
     // 308 -> Same method (GET, POST) and permanent redirection
     return res.redirect(
       `${process.env.URL}${pendingOperation}?workflowId=${workflowId}`
     );
-    // ---
   } catch (ex) {
     global.logger.error({
       message: ex && ex.message ? ex.message : ex,
@@ -447,14 +453,13 @@ async function HandleOtpConfirmation(req, res) {
       return res.sendStatus(200);
     }
     // Se puede responder
-    const lastContext = buildContext(requestContext || {});
     await callback(
       requestCallback,
       formTextResponse(
         channels,
         "Ocurrió un error al procesar tu solicitud. Lamentamos el inconveniente"
       ),
-      lastContext
+      buildContext(requestContext || {})
     );
     return res.sendStatus(200);
   }

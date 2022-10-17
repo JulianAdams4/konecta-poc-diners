@@ -47,7 +47,6 @@ async function singleSelectPublicKey() {
   return new Promise((resolve, reject) => {
     const options = {
       method: "POST",
-      // url: "https://director.dce.ec/desarrollo/directcall/singleSelectPublicKey",
       url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/singleSelectPublicKey`,
       headers: {
         "content-type": "application/json",
@@ -316,8 +315,6 @@ async function singleSelectTaskDevice({
   });
 }
 
-// .....
-
 /**
  * (DIRECTOR_CORE_TARJETAS_URL) singleSelectTaskDevice
  * @param {*} params
@@ -467,8 +464,6 @@ async function verifyOtp({
   });
 }
 
-// .....
-
 async function massiveSelectProductOptionsToOffer({
   access_token,
   id_token,
@@ -488,13 +483,15 @@ async function massiveSelectProductOptionsToOffer({
       url: `${process.env.DIRECTOR_CORE_TARJETAS_URL}/massiveSelectProductOptionsToOffer`,
       method: "POST",
       headers: {
-        channel: "kon",
-        "Content-Type": "application/json",
-        grant_type: oauthServer.grant_type_public,
+        "accept-language": "es-419,es;q=0.9",
+        "content-type": "application/json",
+        accept: "application/json",
         access_token,
-        id_token,
+        channel: "IN",
         feature_id: "ROL@5509", // ***
         func_type: "DPC", // ***
+        grant_type: oauthServer.grant_type_public,
+        id_token,
         pagination_info: "cantRegistros=20;numTotalPag=1;numPagActual=1;",
       },
       data,
@@ -511,6 +508,111 @@ async function massiveSelectProductOptionsToOffer({
   });
 }
 
+async function massiveSelectCustomerProductForBankByExample({
+  access_token,
+  customerId,
+  id_token,
+  product,
+}) {
+  return new Promise((resolve, reject) => {
+    const data = {
+      customer: {
+        "@dataModel": "diners.financials",
+        "@name": "customer",
+        "@version": "1.0",
+        originCustomer: {
+          shortDesc: "PBN",
+        },
+        customerId,
+      },
+      productFamily: {
+        "@name": "productFamily",
+        mnemonic: product,
+      },
+      paginationInfo: {
+        "@name": "paginationInfo",
+        cantRegistros: "10",
+        numPagActual: "1",
+        numTotalPag: "1",
+      },
+    };
+    const options = {
+      url: `${process.env.DIRECTOR_CORE_BANCA_URL}/massiveSelectCustomerProductForBankByExample`,
+      method: "POST",
+      headers: {
+        "accept-language": "es-419,es;q=0.9",
+        "content-type": "application/json",
+        accept: "application/json",
+        access_token,
+        channel: "IN",
+        feature_id: "ROL@5509", // ***
+        func_type: "TMB", // ***
+        grant_type: oauthServer.grant_type_public,
+        id_token,
+      },
+      data,
+    };
+    axios(options)
+      .then((response) => {
+        log(
+          "R",
+          "massiveSelectCustomerProductForBankByExample",
+          response,
+          options
+        );
+        // resolve(response.data);
+        resolve({
+          collection: {
+            "@name": "accounts",
+            account: [
+              {
+                accountNumber: 554411254872170,
+                accountStatus: "ACTIVA",
+                accountantBalance: 0,
+                amountPendingOfPayment: 0,
+                availableBalance: 0,
+                blockedBalance: 0,
+                closeDate: "20220108000000000-0300",
+                name: "CUENTA AHORROS 1",
+                openDate: "20190808000000000-0300",
+                type: "AHORROS",
+                dailyLimitAmount: 600,
+              },
+              {
+                accountNumber: 554411254872165,
+                accountStatus: "ACTIVA",
+                accountantBalance: 0,
+                amountPendingOfPayment: 0,
+                availableBalance: 0,
+                blockedBalance: 0,
+                closeDate: "20220108000000000-0300",
+                name: "CUENTA AHORROS 2",
+                openDate: "20190808000000000-0300",
+                type: "AHORROS",
+                dailyLimitAmount: 600,
+              },
+            ],
+          },
+          paginationInfo: {
+            "@name": "paginationInfo",
+            cantRegistros: 5,
+            numPagActual: 1,
+            numTotalPag: 1,
+          },
+        });
+      })
+      .catch((error) => {
+        log(
+          "D",
+          "massiveSelectCustomerProductForBankByExample",
+          error,
+          options
+        );
+        reject(error);
+      });
+  });
+}
+
 module.exports = {
   Helpers: {
     decryptUsername,
@@ -518,6 +620,7 @@ module.exports = {
   },
 
   directorDateTime,
+
   singleSelectPublicKey,
   getOauthToken,
   singleSelectCustomerBasicData,
@@ -528,4 +631,5 @@ module.exports = {
   verifyOtp,
 
   massiveSelectProductOptionsToOffer,
+  massiveSelectCustomerProductForBankByExample,
 };

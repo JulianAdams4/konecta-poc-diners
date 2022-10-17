@@ -52,15 +52,18 @@ WORKDIR /home/app/
 ENV cgi_headers="true"
 ENV fprocess="node index.js"
 ENV mode="http"
-ENV upstream_url="https://tec-digital-konecta-dev.technisys.net/api/faas/function/poc-ec-diners-konecta"
+ENV upstream_url="http://localhost:3000"
+# ENV upstream_url="https://tec-digital-konecta-dev.technisys.net/api/faas/function/poc-ec-diners-konecta"
 
-ENV exec_timeout="30s"
-ENV write_timeout="3s"
-ENV read_timeout="5s"
-ENV healthcheck_interval="30s"
+ENV exec_timeout="1m"
+ENV write_timeout="10s"
+ENV read_timeout="15s"
+ENV handler_wait_duration="5m"
+ENV healthcheck_interval="1m"
+ENV upstream_timeout="5m"
 
 ENV prefix_logs="false"
 
-HEALTHCHECK --interval=30s CMD [ -e /tmp/.lock ] || exit 1
+HEALTHCHECK --interval=15s CMD [ -e /tmp/.lock ] || exit 1
 
 CMD ["fwatchdog"]
